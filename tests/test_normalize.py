@@ -155,3 +155,24 @@ def test_malformed_extractions_are_invalid_not_a_crash(key, raw):
 def test_noul_exactly_one_half_reads_true():
     a = normalize_answer(CORE.questions["callback_agreed"], {"type": "noul", "noul": 0.5})
     assert a.top == "true" and a.top_p == 0.5
+
+
+def test_a_400_digit_number_is_caught_by_the_explicit_check():
+    """Round 3: the wrapper used to mask _isfinite; call _normalize itself."""
+    from app.engines.base import ANSWER_NAMES, _normalize
+
+    huge = 10 ** 400
+    names = ANSWER_NAMES["system_one"]
+    assert _normalize(CORE.questions["callback_agreed"], {"type": "noul", "noul": huge}, names) == "invalid_answer"
+    assert _normalize(EXT.questions["amount"], {"type": "number", "number": huge, "found": 0.9}, names) == "invalid_answer"
+
+
+def test_the_never_raising_wrapper_logs_what_it_swallows(monkeypatch, caplog):
+    import app.engines.base as base
+
+    def boom(*a):
+        raise ZeroDivisionError
+
+    monkeypatch.setattr(base, "_normalize", boom)
+    assert base.normalize_answer(CORE.questions["call_topic"], {}) == "invalid_answer"
+    assert "ZeroDivisionError" in caplog.text

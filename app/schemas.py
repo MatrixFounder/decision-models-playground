@@ -36,9 +36,9 @@ def json_depth(value: Any, limit: int = MAX_STATE_DEPTH) -> int:
         deepest = max(deepest, d)
         if deepest > limit:
             return deepest
-        stack.extend((x, d + 1) for x in items)
+        # containers only: scalars cannot deepen it (round 3: pushing 3 M zeros cost 0.3 s)
+        stack.extend((x, d + 1) for x in items if isinstance(x, (dict, list)))
     return deepest
-
 
 
 QuestionFailure = Literal["unsupported", "refused", "invalid_answer"]

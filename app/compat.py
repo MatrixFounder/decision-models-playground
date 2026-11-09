@@ -26,6 +26,7 @@ import binascii
 import hmac
 import io
 import json
+import logging
 import math
 from typing import Any
 
@@ -41,6 +42,7 @@ from app.schemas import MAX_STATE_DEPTH, SYSTEM_ONE_TYPES, Question, json_depth,
 from app.settings import is_loopback
 from app.store import new_id
 
+log = logging.getLogger("playground.compat")
 EXTENDED = ("multi", "text", "number", "date")
 IMAGE_FORMATS = ["PNG", "JPEG", "WEBP"]
 
@@ -126,9 +128,9 @@ def create_compat_app(registry: Registry) -> FastAPI:
         body_bytes = await read_body(request)
         if body_bytes is None:
             return error(413, "too_large", limit_bytes=max_body)
-        try:
-            body = json.loads(body_bytes)
-        except ValueError:
+        try:  # parsing 6 MB takes ~0.4 s: off the shared event loop (review round 3)
+            body = await asyncio.to_thread(json.loads, body_bytes)
+        except (ValueError, RecursionError):
             return error(400, "invalid_json")
         if not isinstance(body, dict):
             return error(400, "invalid_request", message="the body is a JSON object")
@@ -170,13 +172,25 @@ def create_compat_app(registry: Registry) -> FastAPI:
             return error(400, "invalid_request", message="state is required")
         if body.get("media"):
             return error(400, "invalid_request", message="media is not accepted yet; send pictures in images")
-        if not isinstance(state, str) and json_depth(state) > MAX_STATE_DEPTH:
+        # cheap first, off the event loop, in this order (review round 3): whip-insight's 1 token per character over
+        # the compact state and the heaviest question group (C speed), then the nesting walk on what is left —
+        # nothing is rendered here (an indent=2 rendering of deep JSON grows with the square of the depth)
+        size = registry.ctx.local.backend.set_size(engine.repo)
+
+        def cheap() -> tuple[int, int]:
+            chars = cheap_chars(state, parsed, size, len(images))
+            if chars > engine.context_tokens:
+                return chars, 0
+            return chars, (json_depth(state) if not isinstance(state, str) else 0)
+
+        try:
+            chars, depth = await asyncio.to_thread(cheap)
+        except RecursionError:
             return error(400, "invalid_request", message=f"state is nested deeper than {MAX_STATE_DEPTH} levels")
-        # cheap first: whip-insight's 1 token per character over the compact state and the heaviest question group;
-        # nothing is rendered yet (an indent=2 rendering of deep JSON grows with the square of the depth)
-        chars = cheap_chars(state, parsed, registry.ctx.local.backend.set_size(engine.repo), len(images))
         if chars > engine.context_tokens:
             return error(413, "too_long", message=f"{chars} characters > {engine.context_tokens}")
+        if depth > MAX_STATE_DEPTH:
+            return error(400, "invalid_request", message=f"state is nested deeper than {MAX_STATE_DEPTH} levels")
 
         try:
             media = await asyncio.to_thread(decode_images, body.get("images"), cfg.max_images, cfg.max_image_pixels)
@@ -192,6 +206,7 @@ def create_compat_app(registry: Registry) -> FastAPI:
         except ValueError as e:
             return error(400, "invalid_request", message=f"mlx-vlm: {e}"[:300])
         except Exception:
+            log.exception("precheck failed")  # the caller gets the JSON contract, the log gets the cause
             return error(500, "model_error")
 
         d1 = {k: d1_question(q) for k, q in parsed.items()}
@@ -206,6 +221,7 @@ def create_compat_app(registry: Registry) -> FastAPI:
         except ValueError as e:
             return error(400, "invalid_request", message=f"mlx-vlm: {e}"[:300])
         except Exception:
+            log.exception("local model call failed")
             return error(500, "model_error")
 
         raw_answers = out.get("answers") if isinstance(out, dict) else None
@@ -225,7 +241,9 @@ def create_compat_app(registry: Registry) -> FastAPI:
 
 
 def host_allowed(host: str, allowed: list[str]) -> bool:
-    """The Host header's name (port dropped) against the allowed names; `*.suffix` matches any subdomain."""
+    """The Host header's name (port dropped) against the allowed names, case-insensitive; `*.suffix` matches any
+    name ending in `.suffix` with something before the dot. A bare `*` (Starlette's "any host") is not honoured:
+    this check fails closed. A bracketed IPv6 Host never matches (COMPAT_HOST takes IPv4 or names)."""
     name = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
     name = name.lower()
     for pattern in allowed:

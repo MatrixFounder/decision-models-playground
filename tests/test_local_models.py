@@ -284,3 +284,37 @@ async def test_closing_stops_absorbing_cancellation(fake_backend):
     with pytest.raises(asyncio.CancelledError):
         await task
     assert _time.perf_counter() - t0 < 0.5
+
+
+async def test_shutdown_answers_calls_in_flight_with_busy_at_once(fake_backend):
+    """Round 3: begin_close() makes a caller waiting on a hung MLX call get Busy now, not at the graceful timeout."""
+    import time as _time
+
+    from app.local_models import Busy
+
+    local = LocalModels(fake_backend)
+    fake_backend.call_delay = 3.0
+    task = asyncio.create_task(local.call(D1_2B, ask))
+    await asyncio.sleep(0.1)
+    t0 = _time.perf_counter()
+    local.begin_close()
+    with pytest.raises(Busy):
+        await task
+    assert _time.perf_counter() - t0 < 0.5
+
+
+async def test_a_queued_caller_does_not_reload_behind_an_abandoned_load(fake_backend):
+    from app.local_models import Busy
+
+    local = LocalModels(fake_backend)
+    fake_backend.load_delay = 0.3
+    first = asyncio.create_task(local.call(D1_2B, ask))
+    await asyncio.sleep(0.05)
+    queued = asyncio.create_task(local.call(D1_2B, ask))
+    await asyncio.sleep(0.05)
+    local.begin_close()
+    for t in (first, queued):
+        with pytest.raises(Busy):
+            await t
+    await asyncio.sleep(0.4)  # let the abandoned load finish on the MLX thread
+    assert len(fake_backend.loads) == 1

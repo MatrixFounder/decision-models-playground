@@ -30,7 +30,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, TypeVar
 
-from app.schemas import MAX_STATE_DEPTH, json_depth  # noqa: F401  (re-exported for the engine)
 
 log = logging.getLogger("playground.local")
 T = TypeVar("T")
@@ -81,6 +80,7 @@ class MlxThread(Executor):
     def __init__(self, name: str = "mlx"):
         self._q: queue.SimpleQueue = queue.SimpleQueue()
         self._stopped = False
+        self._guard = threading.Lock()  # the stop check and the enqueue happen together
         self._thread = threading.Thread(target=self._work, name=name, daemon=True)
         self._thread.start()
         self.ident = self._thread.ident
@@ -99,15 +99,17 @@ class MlxThread(Executor):
                 fut.set_exception(e)
 
     def submit(self, fn, /, *args, **kwargs) -> Future:
-        if self._stopped:  # the Executor contract: never a future that cannot resolve (review round 2)
-            raise RuntimeError("the MLX thread is shut down")
         fut: Future = Future()
-        self._q.put((fut, (lambda *a: fn(*a, **kwargs)) if kwargs else fn, args))
+        with self._guard:
+            if self._stopped:  # the Executor contract: never a future that cannot resolve (review round 2)
+                raise RuntimeError("the MLX thread is shut down")
+            self._q.put((fut, (lambda *a: fn(*a, **kwargs)) if kwargs else fn, args))
         return fut
 
     def shutdown(self, wait: bool = True, *, cancel_futures: bool = False) -> None:
-        self._stopped = True
-        self._q.put(None)
+        with self._guard:
+            self._stopped = True
+            self._q.put(None)
         if wait:
             self._thread.join()
 
@@ -148,7 +150,7 @@ class SnapshotDates:
         return f"{repo}-{day}" if day else repo
 
 
-BREAK = "​"  # mlx-vlm's prompt.BREAK
+BREAK = "\u200b"  # mlx-vlm's prompt.BREAK
 
 
 def specials_pattern(tok: Any) -> re.Pattern | None:
@@ -168,6 +170,38 @@ def escape_specials(pattern: re.Pattern | None, text: str) -> str:
     while n:
         text, n = pattern.subn(lambda m: m[0][0] + BREAK + m[0][1:], text)
     return text
+
+
+def rendered_length(state: Any, limit: int) -> int:
+    """len(render_state(state)) without building the string; stops once past `limit` (then returns > limit).
+    json.dumps(indent=2): a non-empty container at level L writes its brackets, per item a newline and 2(L+1)
+    spaces, commas between items, and a newline plus 2L spaces before the closing bracket; a dict item adds its
+    key and ": "."""
+    if state is None:
+        return 0
+    if isinstance(state, str):
+        return len(state)
+    total, stack = 0, [(state, 0)]
+    while stack:
+        v, level = stack.pop()
+        if isinstance(v, (dict, list)):
+            n = len(v)
+            if not n:
+                total += 2
+            else:
+                total += 2 + n * (1 + 2 * (level + 1)) + (n - 1) + 1 + 2 * level
+                if isinstance(v, dict):
+                    for k, x in v.items():
+                        key = k if isinstance(k, str) else json.dumps(k)
+                        total += len(json.dumps(key, ensure_ascii=False)) + 2
+                        stack.append((x, level + 1))
+                else:
+                    stack.extend((x, level + 1) for x in v)
+        else:
+            total += len(json.dumps(v, ensure_ascii=False))
+        if total > limit:
+            return total
+    return total
 
 
 def render_state(state: Any) -> str:
@@ -274,9 +308,12 @@ class MlxBackend:
         with self._lock:
             hit = self._tokenizers.get(repo)
             if hit is None:
-                from tokenizers import Tokenizer
+                try:
+                    from tokenizers import Tokenizer
 
-                tok = Tokenizer.from_file(str(self.local_path(repo) / "tokenizer.json"))
+                    tok = Tokenizer.from_file(str(self.local_path(repo) / "tokenizer.json"))
+                except Exception as e:  # tokenizers raises a bare Exception for a missing or corrupt file
+                    raise LoadError(f"the tokenizer of {repo} cannot be read: {type(e).__name__}") from None
                 hit = self._tokenizers[repo] = (tok, specials_pattern(tok))
         return hit
 
@@ -334,6 +371,7 @@ class LocalModels:
         self.states: dict[str, ModelState] = {}
         self.memory_gb: float | None = None  # read on the MLX thread after each operation
         self.closing = False
+        self._closed = asyncio.Event()  # set by begin_close: calls in flight stop waiting for MLX
         self._thread = MlxThread()
         self._watcher: asyncio.Task | None = None
 
@@ -353,19 +391,30 @@ class LocalModels:
         self.current = loaded
         s.state, s.last_error, s.snapshot, s.last_used = "ready", None, loaded.snapshot, time.time()
 
-    async def _on_thread(self, fn: Callable[..., T], *args) -> T:
+    async def _on_thread(self, fn: Callable[..., T], *args, abandon_on_close: bool = False) -> T:
         """Run on the MLX thread. However often the caller is cancelled, it waits for the work to end before it
         lets go: the lock is never released while MLX is busy, and a model loaded for a caller who left is
-        adopted (tracked, unloadable) rather than lost (review P2: a second cancel used to leak it)."""
+        adopted (tracked, unloadable) rather than lost (review P2: a second cancel used to leak it).
+        Shutting down changes that: a cancel is no longer absorbed, and with `abandon_on_close` the caller gets
+        `Busy` as soon as shutdown begins — compat answers a JSON 429 at once instead of a text/plain 500 at the
+        graceful timeout (review round 3). The abandoned work finishes, or not, on the daemon thread."""
         fut = asyncio.wrap_future(self._thread.submit(fn, *args))
+        closed = asyncio.ensure_future(self._closed.wait()) if abandon_on_close else None
         cancelled = False
-        while not fut.done():
-            try:
-                await asyncio.wait({fut})
-            except asyncio.CancelledError:
-                if self.closing:  # shutting down: abandon the MLX work (a daemon thread) instead of holding exit
-                    raise
-                cancelled = True
+        try:
+            while not fut.done():
+                if closed is not None and closed.done():
+                    raise Busy("the local model manager is shutting down")
+                try:
+                    await asyncio.wait({fut} if closed is None else {fut, closed},
+                                       return_when=asyncio.FIRST_COMPLETED)
+                except asyncio.CancelledError:
+                    if self.closing:  # shutting down: abandon the MLX work instead of holding the exit
+                        raise
+                    cancelled = True
+        finally:
+            if closed is not None:
+                closed.cancel()
         if cancelled:
             if fn == self.backend.load and fut.exception() is None:
                 self._adopt(fut.result())
@@ -403,14 +452,17 @@ class LocalModels:
         finally:
             s.waiting -= 1  # also when the caller was cancelled while queued
         timings = {"queue_ms": int((time.perf_counter() - t0) * 1000), "load_ms": 0, "call_ms": 0}
+        if self.closing:  # shutdown began while this caller queued: never load again behind an abandoned load
+            self.lock.release()
+            raise Busy("the local model manager is shutting down")
         try:
             if self.current is None or self.current.repo != repo:
                 await self._unload_locked()
                 s.state = "loading"
                 t1 = time.perf_counter()
                 try:
-                    self._adopt(await self._on_thread(self.backend.load, repo, warm_audio))
-                except asyncio.CancelledError:
+                    self._adopt(await self._on_thread(self.backend.load, repo, warm_audio, abandon_on_close=True))
+                except (asyncio.CancelledError, Busy):
                     raise
                 except Exception as e:
                     s.last_error = str(e)[:300]
@@ -423,7 +475,7 @@ class LocalModels:
             s.state = "busy"
             t2 = time.perf_counter()
             try:
-                result = await self._on_thread(fn, loaded)
+                result = await self._on_thread(fn, loaded, abandon_on_close=True)
             finally:
                 timings["call_ms"] = int((time.perf_counter() - t2) * 1000)
                 s.state = "ready"
@@ -463,8 +515,10 @@ class LocalModels:
             self._watcher = asyncio.create_task(watch())
 
     def begin_close(self) -> None:
-        """From the first shutdown signal on: no new calls, and a cancelled caller no longer waits for MLX."""
+        """From the first shutdown signal on: no new calls, calls in flight get Busy at once, and a cancelled
+        caller no longer waits for MLX."""
         self.closing = True
+        self._closed.set()
 
     async def aclose(self, timeout_s: float = 5) -> None:
         """Stop taking calls, try to unload within `timeout_s`, stop the MLX thread. A hung MLX call is abandoned:

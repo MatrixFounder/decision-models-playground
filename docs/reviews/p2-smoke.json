@@ -1,5 +1,5 @@
 {
- "run_at": "2026-11-09T14:42:10+0300",
+ "run_at": "2026-11-09T15:47:14+0300",
  "checks": {
   "1 d1-2B answers the core request with a dated snapshot": {
    "passed": true,
@@ -9,11 +9,11 @@
     "detail": null,
     "snapshot": "LiquidAI/d1-2B-MLX-8bit-20261105",
     "input_tokens": 392,
-    "latency_ms": 336,
+    "latency_ms": 327,
     "timings": {
      "queue_ms": 0,
-     "load_ms": 1596,
-     "call_ms": 336
+     "load_ms": 1757,
+     "call_ms": 327
     },
     "question_failures": {},
     "answers": {
@@ -40,11 +40,11 @@
     "detail": null,
     "snapshot": "LiquidAI/d1-Omni-2B-MLX-8bit-20261105",
     "input_tokens": 261,
-    "latency_ms": 169,
+    "latency_ms": 182,
     "timings": {
      "queue_ms": 0,
-     "load_ms": 1711,
-     "call_ms": 169
+     "load_ms": 1653,
+     "call_ms": 182
     },
     "question_failures": {},
     "answers": {
@@ -91,7 +91,7 @@
   "3b a nested state is too long by the real tokenizer, and d1-2B was not loaded for it": {
    "passed": true,
    "data": {
-    "detail": "64314 tokens in the row > context_tokens 32768"
+    "detail": "524316 rendered state characters, far beyond any row, > context_tokens 32768"
    }
   },
   "3c the refused request did not touch the loaded model": {

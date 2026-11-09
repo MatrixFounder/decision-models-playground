@@ -4,6 +4,7 @@ catalog, estimate, local models."""
 from __future__ import annotations
 
 import asyncio
+import functools
 import socket
 import subprocess
 from collections.abc import AsyncIterator
@@ -32,6 +33,7 @@ from app.store import Store
 
 WEB = ROOT / "web"
 UNLOAD_WAIT_S = 5
+MAX_UI_BODY = 16 * 1024 * 1024  # a run's request; a transcript is well under 1 MB (review round 3, noted)
 PRESETS = ROOT / "presets"
 # DESIGN §18: the browser never frames this page and loads nothing from elsewhere (clickjacking, review P1)
 SECURITY_HEADERS = {
@@ -42,9 +44,11 @@ SECURITY_HEADERS = {
 }
 
 
+@functools.lru_cache(maxsize=4)
 def compat_address(host: str) -> str:
     """What whip-insight should call: the Mac's Bonjour name when the server listens on every interface (§9.3).
-    `scutil --get LocalHostName` is the name mDNS answers to; the BSD hostname can differ on a DHCP-named Mac."""
+    `scutil --get LocalHostName` is the name mDNS answers to; the BSD hostname can differ on a DHCP-named Mac.
+    Computed once (a subprocess), and called off the event loop."""
     if host != "0.0.0.0":
         return host
     try:
@@ -106,6 +110,9 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
     @app.middleware("http")
     async def same_origin(request: Request, call_next):
         # The UI has no auth and a run spends money: a write from another site's page is refused (DESIGN §18).
+        length = request.headers.get("content-length")
+        if length is not None and (not (length.isascii() and length.isdigit()) or int(length) > MAX_UI_BODY):
+            return JSONResponse({"detail": f"request body over {MAX_UI_BODY} bytes"}, status_code=413)
         origin = request.headers.get("origin")
         cross_site = request.headers.get("sec-fetch-site") == "cross-site"
         if request.method not in ("GET", "HEAD") and (origin and origin not in allowed_origins or cross_site):
@@ -218,7 +225,8 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
         return {
             "models": [e.describe() for e in state.registry.engines.values() if isinstance(e, MlxLocal)],
             "compat": {
-                "url": f"http://{compat_address(settings.compat_host)}:{settings.compat_port}/v1/systemone",
+                "url": f"http://{await asyncio.to_thread(compat_address, settings.compat_host)}:{settings.compat_port}"
+                       "/v1/systemone",
                 "lan": not is_loopback(settings.compat_host),
                 "token_set": settings.compat_token is not None,
                 "default_model": cfg.default_model,

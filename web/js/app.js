@@ -4,6 +4,7 @@ import * as api from './api.js';
 import { History } from './history.js';
 import { applyStatic, getLang, setLang, t } from './i18n.js';
 import { LocalModelsView } from './local.js';
+import { backupOnOpen } from './draft.js';
 import { makeHandler } from './runview.js';
 import { el, fromRequest, QuestionEditor, toRequest } from './questions.js';
 import { fmtUsd, renderResults } from './results.js';
@@ -117,7 +118,7 @@ function engineRow(e) {
     if (e.local && e.state) badges.push(el('span', { class: `chip lm-${e.state}` }, t(`state_${e.state}`)));
   }
   const box = el('input', { type: 'checkbox', checked: ui.selected.has(e.id), disabled: !e.available,
-    onchange: (ev) => { if (ev.target.checked) ui.selected.add(e.id); else ui.selected.delete(e.id); syncZdrBox(); onDraftChange(); } });
+    onchange: (ev) => { if (ev.target.checked) ui.selected.add(e.id); else ui.selected.delete(e.id); syncZdrBox(); userEdited(); } });
   return el('label', { class: `engine${e.available ? '' : ' off'}` }, box,
     el('div', { class: 'engine-main' },
       el('div', {}, el('b', {}, e.id), ' ', el('span', { class: 'dim small mono' }, e.model || '')),
@@ -174,7 +175,7 @@ const byIdLocal = (id) => ui.engines.find((e) => e.id === id)?.local;
  * not mix the two tables (review P1). Running state and budget are global; cells and meta belong to the view. */
 function handlerFor(view) {
   return makeHandler(view, {
-    isCurrent: (v) => ui.view === v,
+    getCurrent: () => ui.view,
     render: () => show(),
     setMeta: (kind, p) => {
       $('#run-meta').textContent = kind === 'started'
@@ -237,6 +238,7 @@ async function rerunRun(id) {
   if (!window.confirm(t('rerun_confirm', { est: fmtUsd(est.total_usd), rem: fmtUsd(est.budget.remaining_usd) }))) return;
   const noZdr = record.engines.filter((e) => e.zdr === false).map((e) => e.engine_id);
   const allow = noZdr.length ? window.confirm(t('rerun_no_zdr', { engines: noZdr.join(', ') })) : false;
+  if (ui.running) return;  // a Workbench run started while the dialogs were open (review round 3)
   openRun(record);
   $('#run-error').textContent = '';
   setRunning(true);
@@ -272,10 +274,9 @@ function userEdited() {
 const BACKUP_KEY = 'draft.backup.v1';
 function stashDraft() {
   try {
-    const current = localStorage.getItem(DRAFT_KEY);
-    // a draft that an opened run wrote is not the user's: a second Open must not replace the real backup
-    if (current && !JSON.parse(current).fromRun) localStorage.setItem(BACKUP_KEY, current);
-  } catch { /* storage blocked or unreadable: nothing to restore later */ }
+    const backup = backupOnOpen(localStorage.getItem(DRAFT_KEY), localStorage.getItem(BACKUP_KEY));
+    if (backup) localStorage.setItem(BACKUP_KEY, backup);
+  } catch { /* storage blocked: nothing to restore later */ }
   syncRestore();
 }
 function syncRestore() {
@@ -373,7 +374,7 @@ async function start() {
   setLang(getLang());
   $('#lang').addEventListener('click', () => { setLang(getLang() === 'ru' ? 'en' : 'ru'); relabel(); });
   document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
-  document.querySelectorAll('[data-state-mode]').forEach((b) => b.addEventListener('click', () => { setStateMode(b.dataset.stateMode); onDraftChange(); }));
+  document.querySelectorAll('[data-state-mode]').forEach((b) => b.addEventListener('click', () => { setStateMode(b.dataset.stateMode); userEdited(); }));
   $('#state').addEventListener('input', userEdited);
   $('#title').addEventListener('input', userEdited);
   $('#tags').addEventListener('input', userEdited);

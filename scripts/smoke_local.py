@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import shutil
 import sys
 import time
@@ -62,8 +63,6 @@ async def main(out: Path) -> int:
 
     core = DecisionRequest.model_validate(load("requests/core_ru.json"))
     r = await d2b.run(core, RunOptions())
-    import re
-
     check("1 d1-2B answers the core request with a dated snapshot",
           r.status == "ok" and re.search(r"-\d{8}$", r.snapshot or "") is not None, brief(r))
 

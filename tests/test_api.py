@@ -296,7 +296,6 @@ def test_no_key_in_the_stream_on_failures(client, upstream):
     assert "sk-or-v1-test" not in text and "user_3X" not in text
 
 
-
 # --- review round 2 --------------------------------------------------------------------------------------------------
 
 
@@ -351,3 +350,28 @@ async def test_catalog_refresh_survives_an_odd_shape(tmp_path):
     cat = Catalog(tmp_path / "catalog.json", transport=httpx.MockTransport(handler))
     await cat.refresh_quietly()
     assert cat.error and "TypeError" in cat.error
+
+
+# --- review round 3 --------------------------------------------------------------------------------------------------
+
+
+def test_an_oversized_ui_body_is_413(client, upstream):
+    r = client.post("/api/runs", content=b"x", headers={"Content-Type": "application/json",
+                                                        "Content-Length": str(17 * 1024 * 1024)})
+    assert r.status_code == 413 and not upstream.calls
+
+
+@pytest.mark.parametrize("out,expected", [("Sergeys-MacBook-Pro\n", "Sergeys-MacBook-Pro.local"), ("", None)])
+def test_compat_address_uses_the_bonjour_name(monkeypatch, out, expected):
+    import socket
+    import subprocess
+
+    import app.main as main_module
+
+    main_module.compat_address.cache_clear()
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout=out))
+    monkeypatch.setattr(socket, "gethostname", lambda: "dhcp-host.local")
+    got = main_module.compat_address("0.0.0.0")
+    assert got == (expected or "dhcp-host.local")
+    assert main_module.compat_address("127.0.0.1") == "127.0.0.1"
+    main_module.compat_address.cache_clear()

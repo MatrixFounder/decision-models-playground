@@ -5,6 +5,7 @@ Records never hold a key; `raw` is cut to 64 KB by the engine; media are referen
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import secrets
@@ -31,6 +32,15 @@ def local_day(ts: float | None = None) -> str:
 
 def valid_id(run_id: str) -> bool:
     return len(run_id) == 26 and set(run_id) <= ID_RE_CHARS
+
+
+def full_fsync(fd: int) -> None:
+    """To the disk, not only to its cache: on macOS fsync(2) leaves the drive's write cache unflushed, F_FULLFSYNC
+    does not (Apple's fsync(2) man page; review round 3). Elsewhere, or where the file system refuses it, fsync."""
+    try:
+        fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+    except (AttributeError, OSError):
+        os.fsync(fd)
 
 
 def index_row(record: dict[str, Any]) -> dict[str, Any]:
@@ -65,11 +75,11 @@ class Store:
         with tmp.open("w", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False, indent=1))
             f.flush()
-            os.fsync(f.fileno())
+            full_fsync(f.fileno())
         os.replace(tmp, path)
         dir_fd = os.open(path.parent, os.O_RDONLY)  # the rename itself survives a power loss
         try:
-            os.fsync(dir_fd)
+            full_fsync(dir_fd)
         finally:
             os.close(dir_fd)
         self._append(index_row(record))
@@ -87,7 +97,7 @@ class Store:
                         line = "\n" + line
                 f.write(line.encode("utf-8"))
                 f.flush()
-                os.fsync(f.fileno())
+                full_fsync(f.fileno())
             self._cache = None
 
     def rows(self) -> list[dict[str, Any]]:

@@ -230,7 +230,18 @@ def test_nested_state_is_measured_as_the_model_reads_it(client, fake_backend):
     assert 15000 < compact < 25000  # the compact count alone passes 32,768
     r = client.post("/v1/systemone", json={**WI, "state": state})
     assert r.status_code == 413 and not fake_backend.loads
-    assert max(len(t) for t in fake_backend.counted) > 300_000  # what was counted is the indent=2 rendering
+    # round 3: rendered to ≈ 590 K > 16 × 32,768 — refused from the computed length, nothing rendered or counted
+    assert "rendered state characters" in r.json()["error"]["message"] and not fake_backend.counted
+
+
+def test_a_nested_state_under_the_render_bound_is_counted_rendered(client, fake_backend):
+    import json as _json
+
+    state = [nested(29) for _ in range(150)]  # rendered ≈ 295 K: below the bound, so it is rendered and counted
+    assert len(_json.dumps(state, ensure_ascii=False)) < 12000
+    r = client.post("/v1/systemone", json={**WI, "state": state})
+    assert r.status_code == 413 and "tokens in the row" in r.json()["error"]["message"]
+    assert max(len(t) for t in fake_backend.counted) > 250_000  # the indent=2 rendering, not the compact form
 
 
 @pytest.mark.timeout(10)
@@ -249,7 +260,8 @@ def test_deep_state_is_refused_before_anything_is_rendered(client, fake_backend)
     elapsed = _time.perf_counter() - t0
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    assert r.status_code == 400 and "nested deeper than 32" in r.json()["error"]["message"]
+    # round 3: the compact length (C speed) is checked before the nesting walk, so this is a 413 now
+    assert r.status_code == 413 and r.json()["error"]["code"] == "too_long"
     assert peak < 50 * 1024 * 1024 and elapsed < 1.0 and not fake_backend.counted
 
 
@@ -460,7 +472,9 @@ def test_images_of_the_wrong_type_are_a_json_400(client, fake_backend, images):
 
 
 def test_a_broken_tokenizer_is_model_unavailable(client, fake_backend):
-    fake_backend.tokenizer_error = Exception("No such file or directory (os error 2)")  # what tokenizers raises
+    from app.local_models import LoadError
+
+    fake_backend.tokenizer_error = LoadError("the tokenizer cannot be read")  # what MlxBackend raises (round 3)
     r = client.post("/v1/systemone", json=WI)
     assert r.status_code == 503 and r.json() == {"error": {"code": "model_unavailable"}}
 
@@ -484,10 +498,75 @@ def test_questions_count_by_group_not_all_at_once(client, fake_backend):
     assert r.status_code == 200
 
 
-def test_multi_option_ids_are_counted_twice():
+def test_multi_option_without_description_is_counted_three_times():
+    """Round 3: mlx-vlm writes `"id": id` and the `"id":` marker — three ids; round 2 counted two."""
     from app.engines.mlx_local import question_text
     from app.schemas import Question
 
-    multi = Question(type="multi", instructions="?", criteria={"alpha": None, "beta": None})
-    single = Question(type="choice", instructions="?", criteria={"alpha": None, "beta": None})
-    assert question_text("q", multi).count("alpha") == 2 and question_text("q", single).count("alpha") == 1
+    multi = Question(type="multi", instructions="?", criteria={"alpha": None, "beta": "B"})
+    assert question_text("q", multi).count("alpha") == 3
+    assert question_text("q", multi).count('"beta": B') == 1
+
+
+# --- review round 3 --------------------------------------------------------------------------------------------------
+
+
+def test_a_short_deep_state_is_refused_by_depth(client, fake_backend):
+    r = client.post("/v1/systemone", json={**WI, "state": nested(40)})
+    assert r.status_code == 400 and "nested deeper than 32" in r.json()["error"]["message"]
+
+
+def test_cheap_checks_run_off_the_event_loop(client, fake_backend, monkeypatch):
+    import asyncio
+
+    import app.compat as compat_module
+
+    on_loop = []
+    real = compat_module.cheap_chars
+
+    def spy(*a):
+        try:
+            asyncio.get_running_loop()
+            on_loop.append(True)
+        except RuntimeError:
+            on_loop.append(False)
+        return real(*a)
+
+    monkeypatch.setattr(compat_module, "cheap_chars", spy)
+    assert client.post("/v1/systemone", json=WI).status_code == 200
+    assert on_loop == [False]
+
+
+def test_an_unexpected_precheck_failure_is_a_logged_json_500(client, fake_backend, monkeypatch, caplog):
+    from app.engines.mlx_local import MlxLocal
+
+    async def boom(self, *a, **k):
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr(MlxLocal, "precheck", boom)
+    r = client.post("/v1/systemone", json=WI)
+    assert r.status_code == 500 and r.json() == {"error": {"code": "model_error"}}
+    assert "precheck failed" in caplog.text
+
+
+@pytest.mark.parametrize("host,ok", [
+    ("evillocal", False), (".local", False), ("local", False), ("MAC.LOCAL:8791", True), ("mac.local", True),
+    ("[::1]:8791", False), ("127.0.0.1:8791", True), ("LOCALHOST", True), ("", False),
+])
+def test_host_allowed(host, ok):
+    from app.compat import host_allowed
+
+    assert host_allowed(host, ["127.0.0.1", "localhost", "*.local"]) is ok
+
+
+def test_the_configured_compat_host_is_allowed(settings, local):
+    settings.compat_host, settings.systemone_token = "192.168.1.10", SecretStr(TOKEN)
+    c = compat(settings, local)
+    assert c.get("/health", headers={"Host": "192.168.1.10:8791"}).status_code == 200
+    assert c.get("/health", headers={"Host": "192.168.1.11:8791"}).status_code == 400
+
+
+def test_a_body_too_deep_for_json_is_a_400(client):
+    body = b'{"state": ' + b"[" * 200000 + b"]" * 200000 + b"}"
+    r = client.post("/v1/systemone", content=body, headers={"Content-Type": "application/json"})
+    assert r.status_code in (400, 413) and r.headers["content-type"].startswith("application/json")

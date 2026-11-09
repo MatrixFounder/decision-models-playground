@@ -99,3 +99,25 @@ def test_rows_cache_follows_the_file(tmp_path, monkeypatch):
     assert len(store.rows()) == 1 and len(store.rows()) == 1 and len(reads) == 1  # read once, then cached
     store.save(record())
     assert len(store.rows()) == 2 and len(reads) == 2  # the file changed: read again
+
+
+def test_the_record_its_directory_and_the_index_are_flushed_to_disk(tmp_path, monkeypatch):
+    """Round 3: on macOS fsync(2) leaves the drive cache; full_fsync uses F_FULLFSYNC. The directory is synced
+    after the rename, before the index line."""
+    import os
+    import stat
+
+    import app.store as store_module
+
+    synced = []
+    real = store_module.full_fsync
+
+    def spy(fd):
+        mode = os.fstat(fd).st_mode
+        synced.append("dir" if stat.S_ISDIR(mode) else "file")
+        return real(fd)
+
+    monkeypatch.setattr(store_module, "full_fsync", spy)
+    rec = record()
+    store_module.Store(tmp_path / "runs").save(rec)
+    assert synced == ["file", "dir", "file"]  # the record, its directory after os.replace, the index line

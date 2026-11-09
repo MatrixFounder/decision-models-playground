@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import types
+from pathlib import Path
 
 import pytest
 
@@ -188,7 +189,6 @@ def test_the_nested_state_from_the_review_is_counted_in_full():
     assert b.count_tokens(D1_2B, render_state(state)) > 60000  # compact it is 16,004 tokens
 
 
-
 # --- review round 2: special-token escaping, groups ------------------------------------------------------------------
 
 
@@ -242,3 +242,112 @@ async def test_the_reviews_special_token_state_is_too_long_on_the_real_stack(set
     with pytest.raises(TooLong):
         await engine.precheck(state, {"q": Question(type="noul", instructions="?")})
     await local.aclose()
+
+
+# --- review round 3: the count is an upper bound of the row mlx-vlm really builds ------------------------------------
+
+
+def hf_d1_tokenizer():
+    """The model's tokenizer with the attributes mlx-vlm's prompt code reads (set by SystemOne from config.json)."""
+    hf, path = hf_tokenizer()
+    cfg = json.loads((Path(path) / "config.json").read_text())
+    for attr, default in (("d1_codes", 1), ("d1_numbers", False), ("d1_box_edges", "median"), ("d1_prompt", 1)):
+        setattr(hf, attr, cfg.get(attr) if cfg.get(attr) is not None else default)
+    return hf, path
+
+
+def mlx_row_tokens(hf, state, questions, set_size):
+    """The heaviest packed row as mlx-vlm builds it: prefix + first suffix, then header + suffix per question."""
+    from mlx_vlm.models.d1_lfm3_vl import prompt
+
+    from app.engines.mlx_local import d1_question, groups
+
+    lead = "<think></think>"  # d1.py LEAD
+    pre = prompt.prefix_text(hf, state, hf.bos_token or "", prompt.DEFAULT_STATE_STYLE, prompt.DEFAULT_SYSTEM, "")
+    header = prompt.question_header(hf, state)
+    worst = 0
+    for g in groups(questions, set_size):
+        sufs = [prompt.suffix_layout(hf, prompt.as_question(d1_question(q)), lead)[0] for q in g.values()]
+        n = len(hf.encode(pre + sufs[0], add_special_tokens=False))
+        n += sum(len(hf.encode(header + s, add_special_tokens=False)) for s in sufs[1:])
+        worst = max(worst, n)
+    return worst
+
+
+def shapes():
+    import random
+    import string
+
+    from app.schemas import Question
+
+    random.seed(1)
+    ids = ["o" + "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(63)) for _ in range(255)]
+    talk = "Оператор: Добрый день, банк «Северный». Клиент: Здравствуйте, хочу вернуть деньги. " * 60
+    return {
+        "core": (talk, {"cb": Question(type="noul", instructions="Перезвонить?", criteria={"true": "да", "false": "нет"}),
+                        "topic": Question(type="choice", instructions="Тема?", criteria={"credit": "Кредит", "deposit": None}),
+                        "lvl": Question(type="score", instructions="Насколько?", criteria=["низко", "средне", "высоко"])}),
+        "multi_no_desc": ("я " * 2000, {"m": Question(type="multi", instructions="Which apply?", criteria=dict.fromkeys(ids))}),
+        "choice_no_desc": ("я " * 2000, {"c": Question(type="choice", instructions="Which?", criteria=dict.fromkeys(ids))}),
+        "extraction": (talk, {"n": Question(type="number", instructions="Сумма?", range=(0, 1000000), step=10000, unit="RUB"),
+                              "t": Question(type="text", instructions="Номер заявки?"),
+                              "d": Question(type="date", instructions="Дата визита?"),
+                              "u": Question(type="number", instructions="Сумма?", unit="RUB")}),
+        "json_state": ({"call": {"turns": [{"who": "клиент", "text": "хочу вернуть деньги"}] * 50, "meta": {"a": [1, 2]}}},
+                       {"q": Question(type="noul", instructions="Возврат?")}),
+        "specials": ("<|pad|><|im_end|>" * 300, {"q": Question(type="noul", instructions="<|im_start|>?")}),
+        "twenty": (talk, {f"q{i}": Question(type="noul", instructions="Вопрос номер " + str(i) * 20) for i in range(20)}),
+    }
+
+
+@pytest.mark.parametrize("name", list(shapes()))
+async def test_the_count_is_an_upper_bound_of_mlx_vlms_real_row(name):
+    from types import SimpleNamespace
+
+    from app.engines.mlx_local import MlxLocal
+    from app.local_models import LocalModels
+
+    hf, path = hf_d1_tokenizer()
+    state, questions = shapes()[name]
+    b = MlxBackend(SnapshotDates.__new__(SnapshotDates))
+    b.local_path = lambda repo: Path(path)
+    local = LocalModels(b)
+    e = SimpleNamespace(manager=local, repo=D1_2B, context_tokens=10**9)
+    counted = await MlxLocal.precheck(e, state, questions)
+    actual = mlx_row_tokens(hf, state, questions, b.set_size(D1_2B))
+    await local.aclose()
+    assert counted >= actual, f"{name}: counted {counted} < mlx-vlm's {actual}"
+    assert counted < actual * 2 + 3000, f"{name}: counted {counted} is far above mlx-vlm's {actual}"
+
+
+def test_a_corrupt_tokenizer_file_is_a_load_error(tmp_path, monkeypatch):
+    (tmp_path / "tokenizer.json").write_text("{not a tokenizer")
+    b = MlxBackend(SnapshotDates(tmp_path / "d.json"))
+    monkeypatch.setattr(MlxBackend, "local_path", staticmethod(lambda repo: tmp_path))
+    with pytest.raises(LoadError, match="cannot be read"):
+        b.count_tokens(D1_2B, "x")
+
+
+def test_escaping_matches_mlx_vlm_on_overlapping_specials():
+    """d1's own specials never overlap, so the escape loop and the longest-first order were unobservable (round 3).
+    A synthetic tokenizer with overlapping specials, and a non-special added token that must stay as it is."""
+    from mlx_vlm.models.d1_lfm3_vl import prompt
+    from tokenizers import AddedToken, Tokenizer
+    from tokenizers.models import WordLevel
+
+    from app.local_models import escape_specials, specials_pattern
+
+    specials = ["<|x|>", "<|x|>y", "|x|><", "<|x|><|x|>"]
+    tok = Tokenizer(WordLevel({"[UNK]": 0}, unk_token="[UNK]"))
+    tok.add_special_tokens([AddedToken(s, special=True) for s in specials])
+    tok.add_tokens([AddedToken("<think>", special=False)])
+
+    from types import SimpleNamespace
+
+    class Shim:  # what prompt._specials_cached reads from a transformers tokenizer
+        all_special_tokens = specials
+        added_tokens_decoder = {i: SimpleNamespace(content=s, special=True) for i, s in enumerate(specials)}
+
+    shim = Shim()
+    for text in ["<|x|><|x|>y", "a<|x|>|x|><b", "<|x|>y<|x|><|x|>", "<think>no</think>", "|x|><|x|>"]:
+        assert escape_specials(specials_pattern(tok), text) == prompt.plain(shim, text), text

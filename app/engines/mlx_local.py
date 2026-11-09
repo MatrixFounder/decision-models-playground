@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import math
 import os
 import platform
@@ -26,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from app.engines.base import ANSWER_NAMES, BaseEngine, normalize_answer, truncate_raw
-from app.local_models import Busy, Loaded, LoadError, WaitTimeout, render_state
+from app.local_models import Busy, Loaded, LoadError, WaitTimeout, render_state, rendered_length
 from app.schemas import MAX_STATE_DEPTH, json_depth
 from app.schemas import (
     MAX_CHOICE_OPTIONS,
@@ -40,6 +41,7 @@ from app.schemas import (
     Usage,
 )
 
+log = logging.getLogger("playground.mlx_local")
 MIN_MLX_VLM = (0, 7, 11)
 DEFAULT_CONTEXT = 32768
 # Token allowances on top of the counted text (conservative): the template around a question, an option's code and
@@ -53,9 +55,24 @@ AUDIO_TOKENS = 500
 RENDER_FACTOR = 16
 
 
+DEFAULT_MAX_PIXELS = 1_638_400  # d1's own cap on a picture (config d1_vision_max_pixels)
+
+
 def image_tokens() -> int:
-    """A picture's allowance from d1's pixel cap (`D1_VISION_MAX_PIXELS` raises it): 1,024 pixels a token, plus markup."""
-    return int(os.environ.get("D1_VISION_MAX_PIXELS") or 1_638_400) // 1024 + 100
+    """A picture's allowance from d1's pixel cap (`D1_VISION_MAX_PIXELS` raises it, as in mlx-vlm d1.py): 1,024
+    pixels a token, plus markup. A value that is not a positive whole number is ignored, with a warning: an
+    operator's typo must not turn every request into a 500 (review round 3)."""
+    raw = os.environ.get("D1_VISION_MAX_PIXELS")
+    if not raw:
+        return DEFAULT_MAX_PIXELS // 1024 + 100
+    try:
+        pixels = int(raw)
+        if pixels <= 0:
+            raise ValueError
+    except ValueError:
+        log.warning("D1_VISION_MAX_PIXELS=%r is not a positive whole number; using %d", raw, DEFAULT_MAX_PIXELS)
+        pixels = DEFAULT_MAX_PIXELS
+    return pixels // 1024 + 100
 
 
 class TooLong(Exception):
@@ -81,17 +98,32 @@ def d1_question(q: Question) -> dict[str, Any]:
 
 
 def question_text(key: str, q: Question) -> str:
-    """Everything a question adds to the row as text: its key, instructions, option ids and descriptions, levels.
-    A multi writes each option id once more, as its own yes/no marker (mlx-vlm prompt.py)."""
+    """A superset of the text mlx-vlm writes for a question (prompt.py `question_block`, `suffix_layout`), so the
+    count is an upper bound (tests/test_mlx_backend.py checks it against mlx-vlm's real rows):
+    - a choice option `<code> <description or id>` — we write the description and the id, or the id alone;
+    - a multi option `"<id>": <description or id>`, then the id once more as its `"<id>":` answer marker: an option
+      without a description has its id three times (review round 3: we counted two);
+    - a noul's `Yes: …` / `No: …`, a score's `<i> <level>`, an estimate's grid sentence, a unit.
+    The key is not in mlx-vlm's row; counting it errs on the safe side."""
     parts = [key, q.instructions if isinstance(q.instructions, str) else str(q.instructions)]
-    if isinstance(q.criteria, dict):
-        parts += [f"{k} {v or ''}" for k, v in q.criteria.items()]
-        if q.type == "multi":
-            parts += list(q.criteria)
-    elif isinstance(q.criteria, list):
-        parts += q.criteria
+    c = q.criteria
+    if q.type == "multi" and isinstance(c, dict):
+        for k, v in c.items():
+            name = json.dumps(k, ensure_ascii=False)
+            parts += [f"{name}: {v or k}", f"{name}:"]
+    elif isinstance(c, dict):
+        if q.type == "noul":
+            parts += [f"Yes: {c.get('true')}", f"No: {c.get('false')}"]
+        else:  # `<code> <description, or the id with spaces for underscores>` (`_option_line`); the code is an allowance
+            parts += [f"{k} {v}" if v else k.replace("_", " ") for k, v in c.items()]
+    elif isinstance(c, list):
+        parts += [f"{i} {level}" for i, level in enumerate(c)]
+    if q.range is not None:
+        low, high = q.range
+        parts.append(f"Estimate from {low:g} to {high:g} {q.unit or ''} on 128 equally spaced values, step "
+                     f"{q.step or (high - low) / 127:g}: AA is {low:g}, ZZ is {high:g}. Reply with the code only.")
     if q.unit:
-        parts.append(q.unit)
+        parts.append(f"(unit: {q.unit})")
     return "\n".join(parts)
 
 
@@ -197,13 +229,17 @@ class MlxLocal(BaseEngine):
            questions, counted by the model's own tokenizer (TooLong). Returns the counted tokens."""
         backend = self.manager.backend
         await asyncio.to_thread(backend.validate, {k: d1_question(q) for k, q in questions.items()})
-        if not isinstance(state, str) and json_depth(state) > MAX_STATE_DEPTH:
-            raise ValueError(f"state is nested deeper than {MAX_STATE_DEPTH} levels")
-        compact = compact_len(state)
-        if compact > self.context_tokens * RENDER_FACTOR:
-            raise TooLong(compact, self.context_tokens, "state characters, far beyond any row that fits,")
+        limit = self.context_tokens * RENDER_FACTOR
 
         def measure() -> int:
+            # defence in depth: both callers bound depth first (DecisionRequest → 422, compat → 400)
+            if not isinstance(state, str) and json_depth(state) > MAX_STATE_DEPTH:
+                raise ValueError(f"state is nested deeper than {MAX_STATE_DEPTH} levels")
+            # the rendered length, computed without rendering: nothing longer than RENDER_FACTOR × context is built
+            # (round 3: a depth-32 state of 0.5 M compact characters rendered to 11.8 M and +1.3 GB, then refused)
+            rendered = rendered_length(state, limit)
+            if rendered > limit:
+                raise TooLong(rendered, self.context_tokens, "rendered state characters, far beyond any row,")
             size = backend.set_size(self.repo)
             state_tokens = backend.count_tokens(self.repo, render_state(state)) if state is not None else 0
             worst = max((backend.count_tokens(self.repo, "\n".join(question_text(k, q) for k, q in g.items()))
@@ -212,8 +248,8 @@ class MlxLocal(BaseEngine):
 
         try:
             tokens = await asyncio.to_thread(measure)
-        except Exception as e:  # tokenizers raises a bare Exception for a missing or corrupt tokenizer.json
-            raise LoadError(f"the tokenizer of {self.repo} is not available: {type(e).__name__}") from None
+        except MemoryError:
+            raise TooLong(-1, self.context_tokens, "(out of memory while counting)") from None
         if tokens > self.context_tokens:
             raise TooLong(tokens, self.context_tokens)
         return tokens

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import math
 from typing import Any, ClassVar
 
@@ -22,6 +23,7 @@ from app.schemas import (
     RunOptions,
 )
 
+log = logging.getLogger("playground.engines")
 RAW_LIMIT = 64 * 1024
 SUM_TOLERANCE = 0.001
 
@@ -99,7 +101,9 @@ def normalize_answer(q: Question, raw: Any, names: dict[str, str] = ANSWER_NAMES
     (RQ-4) that sends an odd field costs that question, not the whole engine result (review P1)."""
     try:
         return _normalize(q, raw, names)
-    except Exception:  # any odd value is this question's problem, never the engine's
+    except Exception as e:  # any odd value is this question's problem, never the engine's
+        # logged: a bug in _normalize must not pass for the model misbehaving on every question (review round 3)
+        log.warning("normalize_answer: %s on a %s answer", type(e).__name__, q.type)
         return "invalid_answer"
 
 

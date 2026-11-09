@@ -329,7 +329,6 @@ async def test_zod_400_on_another_field_is_not_unsupported(settings, upstream):
     assert r.request_failure == "refused" and r.question_failures == {} and len(upstream.calls) == 1
 
 
-
 async def test_a_400_digit_number_is_one_invalid_answer_and_keeps_the_cost(settings, upstream):
     body = or_body("liquid__d1.1", "core_ru_0")
     huge = "1" + "0" * 400

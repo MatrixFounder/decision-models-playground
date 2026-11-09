@@ -15,7 +15,14 @@ export function compareCell(x, y) {
   if (['text', 'number', 'date'].includes(x.type)) {
     const va = x.extract?.value ?? x.extract?.text ?? '∅';
     const vb = y.extract?.value ?? y.extract?.text ?? '∅';
-    return { text: `${va} → ${vb}`, sub: '', changed: String(va) !== String(vb) };
+    const fa = x.extract?.found;
+    const fb = y.extract?.found;
+    const df = fa != null && fb != null ? fb - fa : 0;
+    return {
+      text: `${va} → ${vb}`,
+      sub: fa != null || fb != null ? `${t('found')} ${fmtP(fa)} → ${fmtP(fb)}` : '',
+      changed: String(va) !== String(vb) || Math.abs(df) >= 0.05,  // a drop in `found` matters (round 3)
+    };
   }
   const pa = own(x.probabilities, x.top) ?? 0;
   const pb = own(y.probabilities, x.top) ?? 0;

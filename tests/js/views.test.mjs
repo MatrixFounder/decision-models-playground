@@ -9,7 +9,7 @@ function harness() {
   const log = { render: [], meta: [], finish: [] };
   let current = null;
   const deps = {
-    isCurrent: (v) => v === current,
+    getCurrent: () => current,
     render: (v) => log.render.push(v.name),
     setMeta: (kind) => log.meta.push(kind),
     finish: (name, p, v) => log.finish.push([name, v.name]),
@@ -69,7 +69,17 @@ test('a question key named like an Object member is compared as an ordinary key'
 
 test('extraction answers compare their values, never NaN', () => {
   const ex = (v) => ({ type: 'date', top: null, probabilities: { found: 0.9 }, extract: { value: v, text: v } });
-  assert.deepEqual(compareCell(ex('2026-11-12'), ex('2026-11-12')), { text: '2026-11-12 → 2026-11-12', sub: '', changed: false });
+  const same = compareCell(ex('2026-11-12'), ex('2026-11-12'));
+  assert.equal(same.text, '2026-11-12 → 2026-11-12');
+  assert.equal(same.changed, false);
   assert.equal(compareCell(ex('2026-11-12'), ex(null)).changed, true);
   assert.equal(compareCell(choice('a', 0.5), null), null);
+});
+
+test('a drop in found marks an extraction as changed even with the same value', () => {
+  const ex = (found) => ({ type: 'text', top: null, probabilities: { found }, extract: { value: 'А-48213', found } });
+  const cell = compareCell(ex(0.9), ex(0.2));
+  assert.equal(cell.changed, true);
+  assert.match(cell.sub, /0\.900 → 0\.200/);
+  assert.equal(compareCell(ex(0.9), ex(0.88)).changed, false);
 });

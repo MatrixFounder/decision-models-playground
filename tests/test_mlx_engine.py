@@ -143,7 +143,8 @@ async def test_nested_state_is_too_long_before_any_load(settings, local, fake_ba
     req = DecisionRequest(state={"s": [nested(29) for _ in range(300)]}, questions=CORE["questions"])
     r = await engine(settings, local).run(req, RunOptions())
     assert r.request_failure == "too_long" and not fake_backend.loads
-    assert fake_backend.counted[0].count("\n") > 10000  # what was counted is the indent=2 rendering
+    # rendered ≈ 590 K > 16 × 32,768: refused from the computed rendered length, nothing rendered or counted
+    assert "rendered state characters" in r.detail and not fake_backend.counted
 
 
 async def test_question_text_is_counted(settings, local, fake_backend):
@@ -191,7 +192,6 @@ def test_shared_manager_survives_the_ui_shutting_down(settings, upstream, local)
     assert own.closing  # an app that built its own manager closes it
 
 
-
 # --- review round 2 --------------------------------------------------------------------------------------------------
 
 
@@ -217,7 +217,9 @@ def test_a_deep_state_is_a_422_on_the_ui(settings, upstream, local):
 
 
 async def test_a_broken_tokenizer_is_unreachable(settings, local, fake_backend):
-    fake_backend.tokenizer_error = Exception("corrupt tokenizer.json")
+    from app.local_models import LoadError
+
+    fake_backend.tokenizer_error = LoadError("corrupt tokenizer.json")  # what MlxBackend raises (round 3)
     r = await engine(settings, local).run(DecisionRequest.model_validate(CORE), RunOptions())
     assert r.request_failure == "unreachable" and not fake_backend.loads
 
@@ -226,3 +228,69 @@ async def test_a_huge_state_is_too_long_without_rendering(settings, local, fake_
     req = DecisionRequest(state={"s": "я" * (32768 * 16 + 1)}, questions=CORE["questions"])
     r = await engine(settings, local).run(req, RunOptions())
     assert r.request_failure == "too_long" and not fake_backend.counted  # refused by the compact size alone
+
+
+# --- review round 3 --------------------------------------------------------------------------------------------------
+
+
+async def test_counting_runs_off_the_event_loop(settings, local, fake_backend, monkeypatch):
+    import asyncio
+
+    on_loop = []
+    real = fake_backend.count_tokens
+
+    def spy(repo, text):
+        try:
+            asyncio.get_running_loop()
+            on_loop.append(True)
+        except RuntimeError:
+            on_loop.append(False)
+        return real(repo, text)
+
+    monkeypatch.setattr(fake_backend, "count_tokens", spy)
+    await engine(settings, local).run(DecisionRequest.model_validate(CORE), RunOptions())
+    assert on_loop and not any(on_loop)
+
+
+async def test_precheck_counts_by_group_of_set_size(settings, local, fake_backend):
+    """1 token a character: a 21,000-character state and 20 questions of 600 characters fit each group of 16
+    (≈ 31.2 K) but not all 20 at once (≈ 33.7 K). Margins checked by planting a single group (round 3)."""
+    fake_backend.tokens_per_char = 1
+    questions = {f"q{i}": {"type": "noul", "instructions": "д" * 600} for i in range(20)}
+    r = await engine(settings, local).run(DecisionRequest(state="я" * 21000, questions=questions), RunOptions())
+    assert r.status == "ok", r.detail
+
+
+async def test_a_state_over_the_render_bound_is_never_rendered(settings, local, fake_backend, monkeypatch):
+    import app.engines.mlx_local as mlx_local
+
+    monkeypatch.setattr(mlx_local, "render_state", lambda s: pytest.fail("rendered a state over the bound"))
+    state = {"rows": [["я" * 30] * 30 for _ in range(30)]}  # 0.03 M compact, but deep lists render far longer
+    state = {"s": [state] * 30}
+    r = await engine(settings, local).run(DecisionRequest(state=state, questions=CORE["questions"]), RunOptions())
+    assert r.request_failure == "too_long" and "rendered state characters" in r.detail
+
+
+async def test_precheck_keeps_its_own_depth_guard(settings, local):
+    def nested(d):
+        return [nested(d - 1)] if d else 0
+
+    with pytest.raises(ValueError, match="nested deeper"):
+        await engine(settings, local).precheck([nested(40)], {"q": Question(type="noul", instructions="?")})
+
+
+async def test_out_of_memory_while_counting_is_too_long(settings, local, fake_backend):
+    fake_backend.tokenizer_error = MemoryError()
+    r = await engine(settings, local).run(DecisionRequest.model_validate(CORE), RunOptions())
+    assert r.request_failure == "too_long" and not fake_backend.loads
+
+
+@pytest.mark.parametrize("value,tokens", [(None, 1700), ("3276800", 3300), ("1.6e6", 1700), ("-5", 1700), ("x", 1700)])
+def test_image_allowance_follows_d1_vision_max_pixels(monkeypatch, value, tokens):
+    from app.engines.mlx_local import image_tokens
+
+    if value is None:
+        monkeypatch.delenv("D1_VISION_MAX_PIXELS", raising=False)
+    else:
+        monkeypatch.setenv("D1_VISION_MAX_PIXELS", value)
+    assert image_tokens() == tokens
