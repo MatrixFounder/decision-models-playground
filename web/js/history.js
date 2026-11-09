@@ -51,6 +51,23 @@ export function compareRuns(r1, r2) {
   return { a, b, engines, rows };
 }
 
+/** Only a comparative run opens, reruns and compares in the Workbench; a probe (and later a dataset run or an
+ * experiment) has its own screen. Pure (node --test). */
+export function isWorkbenchRun(record) {
+  return !record?.kind || record.kind === 'compare';
+}
+
+/** The message for a record that is not a Workbench run, by its kind. */
+export function notWorkbenchMessage(kind) {
+  return kind === 'probe' ? t('not_a_compare_run') : t('not_workbench_run', { kind });
+}
+
+/** What a History row offers. Pure. */
+export function rowActions(row) {
+  const ok = isWorkbenchRun(row);
+  return { open: ok, rerun: ok, pick: ok, tags: (row.tags || []).filter((g) => g !== row.kind) };
+}
+
 export class History {
   constructor(root, { onOpen, onRerun }) {
     this.root = root;
@@ -93,18 +110,22 @@ export class History {
     } else {
       const head = el('tr', {}, el('th', {}, ''), el('th', {}, t('when')), el('th', {}, t('title')),
         el('th', {}, t('engines')), el('th', {}, t('questions')), el('th', {}, t('cost_col')), el('th', {}, ''));
-      const body = this.rows.map((r) => el('tr', {},
-        el('td', {}, el('input', { type: 'checkbox', checked: this.picked.has(r.id),
-          onchange: (e) => { if (e.target.checked) this.picked.add(r.id); else this.picked.delete(r.id); } })),
-        el('td', { class: 'nowrap' }, when(r.created_at)),
-        el('td', {}, r.title || el('span', { class: 'dim mono small' }, r.id),
-          ...(r.tags || []).map((g) => el('span', { class: 'chip' }, g))),
-        el('td', {}, Object.entries(r.status || {}).map(([id, s]) => el('span', { class: `chip st-${s}` }, id))),
-        el('td', { class: 'mono small' }, (r.questions || []).join(', ')),
-        el('td', { class: 'mono nowrap' }, fmtUsd(r.cost_usd)),
-        el('td', { class: 'nowrap' },
-          el('button', { class: 'ghost', onclick: () => this.open(r.id) }, t('open')),
-          el('button', { class: 'ghost', onclick: () => this.onRerun(r.id) }, t('rerun')))));
+      const body = this.rows.map((r) => {
+        const can = rowActions(r);
+        return el('tr', {},
+          el('td', {}, el('input', { type: 'checkbox', checked: this.picked.has(r.id), disabled: !can.pick,
+            onchange: (e) => { if (e.target.checked) this.picked.add(r.id); else this.picked.delete(r.id); } })),
+          el('td', { class: 'nowrap' }, when(r.created_at)),
+          el('td', {}, r.title || el('span', { class: 'dim mono small' }, r.id),
+            isWorkbenchRun(r) ? '' : el('span', { class: 'chip warn' }, r.kind),
+            ...can.tags.map((g) => el('span', { class: 'chip' }, g))),
+          el('td', {}, Object.entries(r.status || {}).map(([id, s]) => el('span', { class: `chip st-${s}` }, id))),
+          el('td', { class: 'mono small' }, (r.questions || []).join(', ')),
+          el('td', { class: 'mono nowrap' }, fmtUsd(r.cost_usd)),
+          el('td', { class: 'nowrap' },
+            el('button', { class: 'ghost', disabled: !can.open, onclick: () => this.open(r.id) }, t('open')),
+            el('button', { class: 'ghost', disabled: !can.rerun, onclick: () => this.onRerun(r.id) }, t('rerun'))));
+      });
       out.push(el('div', { class: 'table-wrap' }, el('table', { class: 'history' }, el('thead', {}, head), el('tbody', {}, body))));
     }
     out.push(el('div', { id: 'compare' }));

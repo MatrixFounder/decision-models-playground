@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import logging
 import socket
 import subprocess
 from collections.abc import AsyncIterator
@@ -23,8 +24,10 @@ from pydantic import ValidationError
 from app import __version__
 from app.budget import Budget
 from app.catalog import Catalog
+from app.engines.base import BaseEngine
 from app.engines.mlx_local import MlxLocal
 from app.local_models import LocalModels, make_local
+from app.probe import PROBE_TERMINAL, PROBED_KINDS, Prober, ProbeIn, matrix_rows, valid_engine_id
 from app.registry import Registry, load_config
 from app.runner import TERMINAL, Runner, RunRejected, sse
 from app.schemas import Question, RunIn, RunOptions
@@ -32,6 +35,7 @@ from app.settings import ROOT, UI_HOSTS, Settings, get_settings, is_loopback
 from app.store import Store
 
 WEB = ROOT / "web"
+log = logging.getLogger("playground.main")
 UNLOAD_WAIT_S = 5
 MAX_UI_BODY = 16 * 1024 * 1024  # a run's request; a transcript is well under 1 MB (review round 3, noted)
 PRESETS = ROOT / "presets"
@@ -70,8 +74,10 @@ def build_state(settings: Settings, transport=None, local: LocalModels | None = 
     registry = Registry(settings, catalog, transport=transport, local=local)
     store = Store(settings.runs_dir)
     budget = Budget(settings.daily_budget_usd, store)
+    prober = Prober(store, budget, registry.ctx.probes, settings.data_dir / "media")
     return {"settings": settings, "catalog": catalog, "registry": registry, "store": store, "budget": budget,
-            "runner": Runner(registry, store, budget), "tasks": set(), "local": local, "owns_local": owns_local}
+            "runner": Runner(registry, store, budget), "prober": prober, "tasks": set(), "local": local,
+            "owns_local": owns_local}
 
 
 def create_app(settings: Settings | None = None, transport=None, refresh_catalog: bool = True,
@@ -126,31 +132,51 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
     def st(request: Request) -> Any:
         return request.app.state
 
+    def stream_events(request: Request, work, terminal: tuple[str, ...], fallback: str) -> StreamingResponse:
+        """SSE over a background task: `work(emit)` ends with one of `terminal`. The task lives on if the browser
+        goes away — a run or a probe is saved and billed either way. Exactly one terminal event per stream: a task
+        that ends without one (a bug, a cancel) gets `fallback`, so no stream waits forever (review P3)."""
+        state = st(request)
+        queue: asyncio.Queue = asyncio.Queue()
+        ended = False
+
+        async def emit(name: str, payload: dict[str, Any]) -> None:
+            nonlocal ended
+            if ended:
+                return
+            ended = name in terminal
+            await queue.put((name, payload))
+
+        def finished(task: asyncio.Task) -> None:
+            nonlocal ended
+            state.tasks.discard(task)
+            if not ended:
+                ended = True
+                why = "cancelled" if task.cancelled() else (
+                    f"{type(task.exception()).__name__}" if task.exception() else "ended without a result")
+                queue.put_nowait((fallback, {"message": f"the server's work {why}"}))
+
+        task = asyncio.create_task(work(emit))
+        state.tasks.add(task)
+        task.add_done_callback(finished)
+
+        async def events() -> AsyncIterator[str]:
+            while True:
+                name, payload = await queue.get()
+                yield sse(name, payload)
+                if name in terminal:
+                    break
+
+        return StreamingResponse(events(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
     def stream(request: Request, run_in: RunIn) -> StreamingResponse:
         state = st(request)
         try:
             state.runner.engines_for(run_in.engines)
         except RunRejected as e:
             raise HTTPException(400, str(e)) from None
-        queue: asyncio.Queue = asyncio.Queue()
-
-        async def emit(name: str, payload: dict[str, Any]) -> None:
-            await queue.put((name, payload))
-
-        # the run lives on if the browser goes away: it is saved and billed either way
-        task = asyncio.create_task(state.runner.execute(run_in, emit))
-        state.tasks.add(task)
-        task.add_done_callback(state.tasks.discard)
-
-        async def events() -> AsyncIterator[str]:
-            while True:
-                name, payload = await queue.get()
-                yield sse(name, payload)
-                if name in TERMINAL:
-                    break
-
-        return StreamingResponse(events(), media_type="text/event-stream",
-                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+        return stream_events(request, lambda emit: state.runner.execute(run_in, emit), TERMINAL, "run_error")
 
     # --- engines, catalog, budget -------------------------------------------------------------------------------------
     @app.get("/api/engines")
@@ -174,6 +200,54 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
         if c.error:
             raise HTTPException(502, f"catalog refresh failed: {c.error}")
         return c.summary()
+
+    # --- probe and matrix (DESIGN §13) --------------------------------------------------------------------------
+    def probe_engine(request: Request, body: ProbeIn) -> BaseEngine:
+        """The engine a probe may run on, or the reason it may not — before anything streams or is paid."""
+        state = st(request)
+        engine = state.registry.engines.get(body.engine_id)
+        if engine is None or engine.kind not in PROBED_KINDS:
+            raise HTTPException(400, "no decision engine with this id")
+        if not valid_engine_id(engine.spec.id):
+            raise HTTPException(400, f"engine id {engine.spec.id!r} cannot name a probe directory: rename it in "
+                                     "config.yaml (letters, digits, '.', '_', '-')")
+        ok, reason = engine.available()
+        if not ok:
+            raise HTTPException(400, f"engine not available: {reason}")
+        return engine
+
+    @app.post("/api/probe/estimate")
+    async def probe_estimate(request: Request, body: ProbeIn) -> dict[str, Any]:
+        state = st(request)
+        engine = probe_engine(request, body)
+        return {"estimate_usd": state.prober.estimate(engine, body.long_context),
+                "steps": state.prober.plan(engine, body.long_context), "budget": state.budget.status()}
+
+    @app.post("/api/probe")
+    async def probe(request: Request, body: ProbeIn) -> StreamingResponse:
+        state = st(request)
+        engine = probe_engine(request, body)
+        if not engine.spec.zdr and not body.allow_no_zdr:
+            raise HTTPException(400, "ZDR is off for this engine: confirm sending the probe's synthetic text "
+                                     "without ZDR (allow_no_zdr)")
+        if engine.spec.id in state.prober.busy:
+            raise HTTPException(409, f"a probe of {engine.spec.id} is already running")
+
+        async def work(emit):
+            try:
+                await state.prober.run(engine, emit, long_context=body.long_context, allow_no_zdr=body.allow_no_zdr)
+            except Exception as e:
+                log.exception("probe failed")
+                await emit("probe_error", {"message": f"{type(e).__name__}: {e}"[:500],
+                                           "budget": state.budget.status()})
+
+        return stream_events(request, work, PROBE_TERMINAL, "probe_error")
+
+    @app.get("/api/matrix")
+    async def matrix(request: Request) -> dict[str, Any]:
+        state = st(request)
+        rows = matrix_rows(state.registry, state.registry.ctx.probes, state.store.rows())
+        return {"rows": rows, "catalog": state.catalog.summary()}
 
     @app.get("/api/budget")
     async def budget(request: Request) -> dict[str, Any]:

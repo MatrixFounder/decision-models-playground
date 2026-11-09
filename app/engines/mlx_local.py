@@ -22,6 +22,7 @@ import logging
 import math
 import os
 import platform
+import re
 from importlib import metadata
 from pathlib import Path
 from typing import Any
@@ -56,6 +57,10 @@ RENDER_FACTOR = 16
 
 
 DEFAULT_MAX_PIXELS = 1_638_400  # d1's own cap on a picture (config d1_vision_max_pixels)
+
+# mlx-vlm's own refusals of a question or a medium (api.py `named`/`ask`, media.py `_encode`): the probe reads them as
+# "not served"; every other ValueError of a call is an engine error (review P3)
+CAPABILITY_REFUSAL = re.compile(r"^question '|serves noul, choice and score questions only|^this checkpoint takes no ")
 
 
 def image_tokens() -> int:
@@ -188,7 +193,10 @@ class MlxLocal(BaseEngine):
             return False, f"{self.repo} is not downloaded: make models"
         return True, "ok"
 
-    def profile(self) -> CapabilityProfile:
+    def context_limit_tokens(self) -> int:
+        return self.context_tokens
+
+    def default_profile(self) -> CapabilityProfile:
         media = ["image"] + (["audio"] if self.spec.audio else [])
         return CapabilityProfile(types=["noul", "choice", "score", "multi", "text", "number", "date"],
                                  max_choice_options=MAX_CHOICE_OPTIONS, max_score_levels=MAX_SCORE_LEVELS,
@@ -268,6 +276,13 @@ class MlxLocal(BaseEngine):
             return EngineResult.build(self.spec.id, keys, answers, {**not_text, **(failures or {})},
                                       latency_ms=latency_ms, **kw)
 
+        def refusal(e: ValueError) -> EngineResult:
+            # only mlx-vlm's own question and media checks say "this is not served" (a 400 for the probe's reading);
+            # any other ValueError — a broadcast error, a bad WAV — is an engine error, not a missing capability
+            if CAPABILITY_REFUSAL.search(str(e)):
+                return done({}, request_failure="refused", detail=f"mlx-vlm: {e}"[:300], http_status=400)
+            return done({}, request_failure="provider_error", detail=f"ValueError: {e}"[:300])
+
         if self.manager is None:
             return done({}, request_failure="unreachable", detail="the local model manager is not running")
         send = {k: q for k, q in req.questions.items() if k not in not_text}
@@ -285,7 +300,7 @@ class MlxLocal(BaseEngine):
         except LoadError as e:
             return done({}, request_failure="unreachable", detail=str(e))
         except ValueError as e:
-            return done({}, request_failure="refused", detail=f"mlx-vlm: {e}"[:300])
+            return refusal(e)
 
         d1 = {k: d1_question(q) for k, q in send.items()}
         try:
@@ -298,8 +313,8 @@ class MlxLocal(BaseEngine):
             return done({}, request_failure="timed_out", detail=str(e))
         except LoadError as e:
             return done({}, request_failure="unreachable", detail=str(e))
-        except ValueError as e:  # mlx-vlm refused what its own checks let through
-            return done({}, request_failure="refused", detail=f"mlx-vlm: {e}"[:300])
+        except ValueError as e:
+            return refusal(e)
         except Exception as e:
             return done({}, request_failure="provider_error", detail=f"{type(e).__name__}: {e}"[:300])
 

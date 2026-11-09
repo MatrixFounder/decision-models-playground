@@ -32,6 +32,10 @@ from app.schemas import (
 )
 
 URL = "https://openrouter.ai/api/alpha/decisions"
+# P3 live (2026-11-09): an over-long prompt answers 422 "The prompt for question `q` is over the model's input limit of
+# 65536 tokens, images included, or 250000 bytes of text." — the request is too long; the question is not refused
+INPUT_LIMIT = re.compile(r"over the model's input limit")
+TEXT_BYTES = 250_000  # the same message: the API's own cap on a prompt's text, whatever the model's context
 # P0: "Liquid does not accept box questions; question 1 is a box" — only that phrase marks a question unsupported
 BOX_INDEX = re.compile(r"question (\d+) is a box\b")
 
@@ -125,7 +129,15 @@ class OpenRouterDecisions(BaseEngine):
             return False, "OPENROUTER_API_KEY is not set in .env"
         return True, "ok"
 
-    def profile(self) -> CapabilityProfile:
+    def context_limit_tokens(self) -> int:
+        m = self.ctx.catalog.model(self.spec.model) or {}
+        return int(m.get("context_length") or 65536)
+
+    def max_text_bytes(self) -> int:
+        # for Russian text the API's 250,000 bytes bind before d1.1's 65,536 tokens (~49 K tokens, P3 live)
+        return min(b for b in (self.spec.max_request_bytes, TEXT_BYTES) if b)
+
+    def default_profile(self) -> CapabilityProfile:
         # Until the probe (P3): System One's three types; 255 options and 10 levels were accepted in P0.
         return CapabilityProfile(types=["noul", "choice", "score"], max_choice_options=MAX_CHOICE_OPTIONS,
                                  max_score_levels=MAX_SCORE_LEVELS, source="default")
@@ -135,10 +147,12 @@ class OpenRouterDecisions(BaseEngine):
 
     def estimate_cost(self, req: DecisionRequest) -> float:
         cfg = self.ctx.budget
-        tokens = cfg.tokens_per_char * req.text_size() + cfg.overhead_tokens
+        return self.cost_of_tokens(cfg.tokens_per_char * req.text_size() + cfg.overhead_tokens)
+
+    def cost_of_tokens(self, tokens: float) -> float:
         price = self.price_per_token()
         if price is None:
-            price = self.ctx.catalog.max_decision_price() or cfg.fallback_price_per_mtok / 1e6
+            price = self.ctx.catalog.max_decision_price() or self.ctx.budget.fallback_price_per_mtok / 1e6
         return tokens * price
 
     def describe(self) -> dict[str, Any]:
@@ -213,9 +227,12 @@ class OpenRouterDecisions(BaseEngine):
                         return done({}, detail=error_text(data, status), raw=truncate_raw(scrub(data)))
                     continue
             cls = {413: "too_long", 429: "rate_limited", 408: "timed_out"}.get(status, "refused")
+            if status in (400, 422) and INPUT_LIMIT.search(json.dumps(data, ensure_ascii=False)):
+                cls = "too_long"  # not "refused with 422", which a probe would read as "not served"
             if status == 200:
                 cls = "provider_error"
-            return done({}, request_failure=cls, detail=error_text(data, status), raw=truncate_raw(scrub(data)))
+            return done({}, request_failure=cls, detail=error_text(data, status), raw=truncate_raw(scrub(data)),
+                        http_status=status)
         raise AssertionError("unreachable: round 2 always returns")
 
     def _read(self, data: dict, req: DecisionRequest, sent: list[str], done) -> EngineResult:

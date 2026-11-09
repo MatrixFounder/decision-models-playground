@@ -40,9 +40,10 @@ export const listRuns = (params = {}) => {
 };
 export const getRun = (id) => json(`/api/runs/${encodeURIComponent(id)}`);
 export const getLocalModels = () => json('/api/local/models');
+export const getMatrix = () => json('/api/matrix');
 export const unloadLocal = (id) => post(`/api/local/models/${encodeURIComponent(id)}/unload`);
 
-export const TERMINAL = ['run_done', 'budget_stop', 'run_error'];
+export const TERMINAL = ['run_done', 'budget_stop', 'run_error', 'probe_done', 'probe_error'];
 
 /** POST and dispatch SSE frames to onEvent(name, payload). Every stream ends with exactly one terminal event for
  * the caller: the server's, or `fatal` when the stream breaks or ends without one (review P1). */
@@ -104,3 +105,5 @@ export function streamPost(url, body, onEvent) {
 export const runCompare = (body, onEvent) => streamPost('/api/runs', body, onEvent);
 /** Rerun: the same inputs and engines; consent to skip ZDR is given again for this run, never inherited (§18). */
 export const rerun = (id, options, onEvent) => streamPost(`/api/runs/${encodeURIComponent(id)}/rerun`, options, onEvent);
+export const probe = (body, onEvent) => streamPost('/api/probe', body, onEvent);
+export const probeEstimate = (body) => post('/api/probe/estimate', body);

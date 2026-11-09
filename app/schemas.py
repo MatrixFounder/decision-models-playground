@@ -42,7 +42,9 @@ def json_depth(value: Any, limit: int = MAX_STATE_DEPTH) -> int:
 
 
 QuestionFailure = Literal["unsupported", "refused", "invalid_answer"]
-RequestFailure = Literal["unreachable", "timed_out", "rate_limited", "refused", "too_long", "provider_error", "budget"]
+# `skipped`: the call was not made — a probe step past the probe's deadline, or a long step with nothing to size it
+RequestFailure = Literal["unreachable", "timed_out", "rate_limited", "refused", "too_long", "provider_error", "budget",
+                         "skipped"]
 
 
 class Question(BaseModel):
@@ -196,6 +198,7 @@ class EngineResult(BaseModel):
     question_failures: dict[str, QuestionFailure] = Field(default_factory=dict)
     request_failure: RequestFailure | None = None
     detail: str | None = None  # a short human reason for a failure, no keys
+    http_status: int | None = None  # of a request failure (a local mlx-vlm refusal counts as 400): the probe reads it
     snapshot: str | None = None
     latency_ms: int = 0
     usage: Usage = Field(default_factory=Usage)

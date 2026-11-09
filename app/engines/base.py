@@ -211,11 +211,60 @@ class BaseEngine:
     def available(self) -> tuple[bool, str]:
         return True, "ok"
 
-    def profile(self) -> CapabilityProfile:
+    def default_profile(self) -> CapabilityProfile:
+        """What the engine kind can serve at most, before any probe."""
         return CapabilityProfile(types=["noul", "choice", "score"], max_choice_options=MAX_CHOICE_OPTIONS,
                                  max_score_levels=MAX_SCORE_LEVELS)
 
+    def probed(self) -> dict[str, Any] | None:
+        """This engine's latest probe (validated by the probe store), when it was made on the kind and model the
+        config names now: after `config.yaml` points the id at another model, the old profile is not this one's
+        (SPEC §5.6.2 item 4; the matrix marks it stale)."""
+        probes = getattr(self.ctx, "probes", None)
+        p = probes.latest(self.spec.id) if probes is not None else None
+        if p and p.get("kind") == self.kind and p.get("model") == (self.spec.model or self.spec.repo):
+            return p
+        return None
+
+    def profile(self) -> CapabilityProfile:
+        """The profile the runner checks questions against (§10 step 2, §13): the latest probe of this engine
+        within the kind's ceiling, else the default. A probe can confirm or narrow, never widen."""
+        default = self.default_profile()
+        p = self.probed()
+        if p is None:
+            return default
+        types = [t for t in default.types if t in (p.get("types") or [])]
+
+        def limit(probed: int | None, top: int | None, ceiling: int | None) -> int | None:
+            # the largest size the probe tried, served, says "at least that", not "at most": the ceiling stands
+            # (P0 measured 255 options served; the probe stops at whip-insight's 240, review P3)
+            if probed is None or top is not None and probed >= top:
+                return ceiling
+            return probed if ceiling is None else min(probed, ceiling)
+
+        return CapabilityProfile(
+            types=types,
+            max_choice_options=limit(p.get("max_choice_options"), p.get("max_choice_probed"), default.max_choice_options),
+            max_score_levels=limit(p.get("max_score_levels"), p.get("max_score_probed"), default.max_score_levels),
+            # pictures are not probed, so they stay as the kind allows; audio only when the probe heard it
+            media=[m for m in default.media if m != "audio" or "audio" in (p.get("media") or [])],
+            source="probe",
+            probed_at=p.get("probed_at"),
+        )
+
+    def context_limit_tokens(self) -> int:
+        """The context the long-context probe step fills (§13.1 step 6)."""
+        return 32768
+
+    def max_text_bytes(self) -> int | None:
+        """The most bytes of text one request may carry, whatever the context (§13.1: caps the long step)."""
+        return self.spec.max_request_bytes
+
     def estimate_cost(self, req: DecisionRequest) -> float | None:
+        return 0.0
+
+    def cost_of_tokens(self, tokens: int) -> float:
+        """The price of `tokens` input tokens (the probe's long step is sized in tokens, not characters)."""
         return 0.0
 
     async def run(self, req: DecisionRequest, opts: RunOptions) -> EngineResult:

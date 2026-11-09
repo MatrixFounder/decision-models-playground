@@ -1,9 +1,10 @@
 // Wiring: tabs, the draft, engines, estimate, run over SSE, budget, language (DESIGN §16).
 
 import * as api from './api.js';
-import { History } from './history.js';
+import { History, isWorkbenchRun, notWorkbenchMessage } from './history.js';
 import { applyStatic, getLang, setLang, t } from './i18n.js';
 import { LocalModelsView } from './local.js';
+import { MatrixView } from './matrix.js';
 import { backupOnOpen } from './draft.js';
 import { makeHandler } from './runview.js';
 import { el, fromRequest, QuestionEditor, toRequest } from './questions.js';
@@ -26,6 +27,7 @@ const ui = {
 const editor = new QuestionEditor($('#questions'), () => userEdited());
 const history = new History($('#history'), { onOpen: openRun, onRerun: rerunRun });
 const localView = new LocalModelsView($('#local'));
+const matrixView = new MatrixView($('#matrix'), { onBudget: () => loadBudget() });
 
 // --- storage (a per-viewer convenience: the page works without it) -------------------------------------------------
 function readDraft() {
@@ -230,6 +232,7 @@ async function rerunRun(id) {
   let est;
   try {
     record = await api.getRun(id);
+    if (!isWorkbenchRun(record)) throw new Error(notWorkbenchMessage(record.kind));
     est = await api.estimate({ request: record.request, engines: record.engines.map((e) => e.engine_id) });
   } catch (e) {
     $('#run-error').textContent = e.message;
@@ -239,7 +242,7 @@ async function rerunRun(id) {
   const noZdr = record.engines.filter((e) => e.zdr === false).map((e) => e.engine_id);
   const allow = noZdr.length ? window.confirm(t('rerun_no_zdr', { engines: noZdr.join(', ') })) : false;
   if (ui.running) return;  // a Workbench run started while the dialogs were open (review round 3)
-  openRun(record);
+  if (!openRun(record)) return;
   $('#run-error').textContent = '';
   setRunning(true);
   const view = startView(record.request, record.engines.map((e) => e.engine_id));
@@ -248,6 +251,10 @@ async function rerunRun(id) {
 
 /** Show a saved run in the Workbench. The user's draft is kept aside first and can be restored (review P1). */
 function openRun(record) {
+  if (!isWorkbenchRun(record)) {  // a probe is not a Workbench run (its results are on the matrix)
+    $('#run-error').textContent = notWorkbenchMessage(record.kind);
+    return false;
+  }
   stashDraft();
   setState(record.request.state);
   setQuestions(record.request.questions);
@@ -263,6 +270,7 @@ function openRun(record) {
   switchTab('workbench');
   ui.draftFromRun = record.id;
   onDraftChange();
+  return true;
 }
 
 /** The user changed the draft: from now on it is theirs, not an opened run's. */
@@ -351,8 +359,10 @@ function switchTab(tab) {
   $('#tab-workbench').hidden = tab !== 'workbench';
   $('#tab-history').hidden = tab !== 'history';
   $('#tab-local').hidden = tab !== 'local';
+  $('#tab-matrix').hidden = tab !== 'matrix';
   if (tab === 'history') history.load();
   if (tab === 'local') localView.load();
+  if (tab === 'matrix') matrixView.load();
   if (tab === 'workbench') loadEngines().catch(() => {});
 }
 function relabel() {
@@ -366,6 +376,7 @@ function relabel() {
   loadPresets();
   if (ui.tab === 'history') history.render();
   if (ui.tab === 'local') localView.render();
+  if (ui.tab === 'matrix') matrixView.render();
   onDraftChange();
 }
 
@@ -422,7 +433,7 @@ async function start() {
     switchTab('history');
     await history.load();
     await history.compare();
-  } else if (['history', 'local'].includes(params.get('tab'))) switchTab(params.get('tab'));
+  } else if (['history', 'local', 'matrix'].includes(params.get('tab'))) switchTab(params.get('tab'));
 }
 
 start();

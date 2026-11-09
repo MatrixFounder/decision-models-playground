@@ -1,7 +1,8 @@
 """One comparative run over several engines (docs/DESIGN.md §10, figure 3).
 
 1. Budget: the estimate of every paid engine; over what is left → `budget_stop`, no call.
-2. Profile: questions an engine's profile refuses get `unsupported` and are not sent.
+2. Profile: questions an engine's profile refuses get `unsupported` and are not sent; media outside the profile
+   refuses the request.
 3. Engines run in parallel (each engine bounds itself by `concurrency`).
 4. `engine_done` / `engine_failed` per engine as soon as it finishes.
 5. The record goes to runs/<day>/<id>.json and one line to runs/index.jsonl; then `run_done`.
@@ -33,7 +34,7 @@ Emit = Callable[[str, dict[str, Any]], Awaitable[None]]
 TERMINAL = ("run_done", "budget_stop", "run_error")
 
 
-def _mlx_vlm_version() -> str | None:
+def mlx_vlm_version() -> str | None:
     try:
         return metadata.version("mlx-vlm")
     except metadata.PackageNotFoundError:
@@ -77,6 +78,10 @@ class Runner:
     async def call(self, engine: BaseEngine, req: DecisionRequest, opts: RunOptions) -> EngineResult:
         keys, refused = self.split(engine, req)
         all_keys = list(req.questions)
+        off = sorted({m.type for m in req.media} - set(engine.profile().media))
+        if off:  # the profile's media is a contract too: audio only where the probe heard it (§13)
+            return EngineResult.build(engine.spec.id, all_keys, {}, {}, request_failure="refused",
+                                      detail=f"the engine's profile takes no {', '.join(off)}")
         if not keys:
             return EngineResult.build(engine.spec.id, all_keys, {}, refused, detail="no question fits the engine's profile")
         try:
@@ -88,7 +93,7 @@ class Runner:
         return EngineResult.build(
             engine.spec.id, all_keys, res.answers, {**refused, **res.question_failures},
             request_failure=res.request_failure, detail=res.detail, snapshot=res.snapshot,
-            latency_ms=res.latency_ms, usage=res.usage, raw=res.raw, timings=res.timings,
+            latency_ms=res.latency_ms, usage=res.usage, raw=res.raw, timings=res.timings, http_status=res.http_status,
         )
 
     async def execute(self, run_in: RunIn, emit: Emit, kind: str = "compare") -> dict[str, Any] | None:
@@ -132,7 +137,7 @@ class Runner:
                 "results": [r.model_dump(mode="json") for r in results],
                 "estimate_usd": est["total_usd"],
                 "cost_usd": sum(r.usage.cost_usd or 0.0 for r in results),
-                "versions": {"app": __version__, "mlx_vlm": _mlx_vlm_version(),
+                "versions": {"app": __version__, "mlx_vlm": mlx_vlm_version(),
                              "models": {r.engine_id: r.snapshot for r in results if r.snapshot}},
             }
             try:

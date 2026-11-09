@@ -39,7 +39,6 @@ from app.engines.mlx_local import MlxLocal, TooLong, cheap_chars, d1_question, j
 from app.local_models import Busy, LoadError, WaitTimeout
 from app.registry import Registry
 from app.schemas import MAX_STATE_DEPTH, SYSTEM_ONE_TYPES, Question, json_depth, valid_key
-from app.settings import is_loopback
 from app.store import new_id
 
 log = logging.getLogger("playground.compat")

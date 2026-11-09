@@ -6,6 +6,7 @@ estimate exceeds what is left does not start. The reservation is released when t
 
 from __future__ import annotations
 
+import math
 import threading
 
 from app.store import Store, local_day
@@ -40,6 +41,8 @@ class Budget:
         }
 
     def reserve(self, amount: float) -> bool:
+        if not math.isfinite(amount) or amount < 0:  # NaN compares false with everything: it would pass the check
+            return False
         with self._lock:
             if self.spent() + self.reserved + amount > self.limit:
                 return False

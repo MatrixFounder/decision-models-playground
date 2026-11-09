@@ -187,7 +187,8 @@ class FakeModel:
             else:
                 answers[k] = {"type": t, t: "А-48213" if t == "text" else None, "span": [76, 83], "found": 0.99,
                               **({} if t == "text" else {"text": "А-48213"})}
-        return {"answers": answers, "usage": {"input_tokens": 400, "output_tokens": 0}}
+        tokens = 30 + len(state) // 2 if self.backend.sized_usage and isinstance(state, str) else 400
+        return {"answers": answers, "usage": {"input_tokens": tokens, "output_tokens": 0}}
 
 
 class FakeBackend:
@@ -204,6 +205,7 @@ class FakeBackend:
         self.counted: list[str] = []  # every row text the precheck measured
         self.tokenizer_error: Exception | None = None
         self.tokens_per_char = 0  # 0: about 2 characters a token; 2: CJK/emoji-like text, 2 tokens a character
+        self.sized_usage = False  # True: the model reports input tokens that grow with the state (the probe's fit)
 
     def load(self, repo, warm_audio):
         from app.local_models import Loaded, LoadError

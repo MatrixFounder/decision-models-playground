@@ -10,6 +10,7 @@ No key is sent: both lists are public. P1 uses prices and ZDR flags; the capabil
 from __future__ import annotations
 
 import json
+import math
 import time
 from pathlib import Path
 from typing import Any
@@ -85,11 +86,14 @@ class Catalog:
         return None
 
     def price_per_token(self, model_id: str | None) -> float | None:
+        """The prompt price; None for a missing, non-numeric, non-finite or negative one (a "nan" price would make
+        every reservation NaN and every SSE frame unserializable, review P3)."""
         m = self.model(model_id)
         try:
-            return float(m["pricing"]["prompt"]) if m else None
+            price = float(m["pricing"]["prompt"]) if m else None
         except (KeyError, TypeError, ValueError):
             return None
+        return price if price is not None and math.isfinite(price) and price >= 0 else None
 
     def max_decision_price(self) -> float | None:
         prices = [self.price_per_token(m["id"]) for m in self.data.get("decisions", [])]

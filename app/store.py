@@ -43,7 +43,33 @@ def full_fsync(fd: int) -> None:
         os.fsync(fd)
 
 
+def write_durably(path: Path, text: str) -> None:
+    """The file fsynced under a temporary name, renamed over `path`, and the rename itself fsynced: after a power
+    loss `path` holds the old text or the new one, never an empty file."""
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        f.write(text)
+        f.flush()
+        full_fsync(f.fileno())
+    os.replace(tmp, path)
+    dir_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        full_fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
 def index_row(record: dict[str, Any]) -> dict[str, Any]:
+    results = record.get("results", [])
+    if record.get("kind") == "probe":
+        # one entry for the probed engine, not one per step (`engine#N`, …): ok when a profile was written
+        engine_id = (record.get("probe") or {}).get("engine_id") or "?"
+        profile = record.get("profile") or {}
+        status = {engine_id: "ok" if record.get("profile") else "failed"}
+        snapshots = {engine_id: profile["snapshot"]} if profile.get("snapshot") else {}
+    else:
+        status = {r["engine_id"]: r["status"] for r in results}
+        snapshots = {r["engine_id"]: r["snapshot"] for r in results if r.get("snapshot")}
     return {
         "id": record["id"],
         "created_at": record["created_at"],
@@ -54,7 +80,8 @@ def index_row(record: dict[str, Any]) -> dict[str, Any]:
         "engines": [e["engine_id"] for e in record.get("engines", [])],
         "questions": list((record.get("request") or {}).get("questions", {})),
         "cost_usd": record.get("cost_usd") or 0.0,
-        "status": {r["engine_id"]: r["status"] for r in record.get("results", [])},
+        "status": status,
+        "snapshots": snapshots,  # the matrix marks a probe stale when a later run answered as another snapshot
     }
 
 
@@ -71,17 +98,7 @@ class Store:
         day = record["day"]
         path = self.dir / day / f"{record['id']}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        with tmp.open("w", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False, indent=1))
-            f.flush()
-            full_fsync(f.fileno())
-        os.replace(tmp, path)
-        dir_fd = os.open(path.parent, os.O_RDONLY)  # the rename itself survives a power loss
-        try:
-            full_fsync(dir_fd)
-        finally:
-            os.close(dir_fd)
+        write_durably(path, json.dumps(record, ensure_ascii=False, indent=1))
         self._append(index_row(record))
         return path
 

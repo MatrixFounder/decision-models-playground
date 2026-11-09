@@ -22,6 +22,7 @@ class EngineContext:
     catalog: Catalog
     budget: BudgetConfig
     local: Any = None  # app.local_models.LocalModels, shared by the UI and the compat server
+    probes: Any = None  # app.probe.ProbeStore: the latest profile per engine (§13)
 
 
 class PlannedEngine(BaseEngine):
@@ -55,7 +56,10 @@ class Registry:
         else:
             self.config_source = None
         self.config = config
-        self.ctx = EngineContext(settings=settings, catalog=catalog, budget=config.budget, local=local)
+        from app.probe import ProbeStore
+
+        self.ctx = EngineContext(settings=settings, catalog=catalog, budget=config.budget, local=local,
+                                 probes=ProbeStore(settings.probes_dir))
         self.engines: dict[str, BaseEngine] = {}
         for spec in config.engines:
             if spec.id in self.engines:

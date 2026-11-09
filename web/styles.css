@@ -208,6 +208,14 @@ h2.section { font-size: 14px; margin: 0; text-transform: uppercase; letter-spaci
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 6px 0 10px; }
 pre.code { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; overflow-x: auto; white-space: pre; }
 
+/* ── matrix ───────────────────────────────────────────────────── */
+table.matrix td, table.matrix th { padding: 6px 8px; font-size: 13px; }
+table.matrix td.cap { text-align: center; font-weight: 700; }
+.cap-yes { color: var(--ok); }
+.cap-no { color: var(--danger); }
+.cap-unchecked, .cap-never { color: var(--text-dim); font-weight: 400 !important; }
+tr.catalog-row th b { font-weight: 500; }
+
 /* ── history ──────────────────────────────────────────────────── */
 .filters { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
 table.history td button { padding: 2px 8px; }
