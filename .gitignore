@@ -10,3 +10,32 @@ probes/
 reports/
 media/
 .DS_Store
+
+# >>> agentic-development framework >>>
+# Managed by the agentic-development installer. Do not edit between the markers.
+
+# Framework content (symlink or local copy) and installer state.
+/.agentic-development
+/.agentic-installer-state.json
+
+# Framework components.
+/.agent/skills/*
+/.agent/workflows/*
+/.agent/tools
+/.agent/rules
+/.agent/sessions
+/.agent/feedback
+/System
+/.claude/skills/*
+/.claude/commands/*
+/.claude/agents/*
+/.claude/hooks
+/.claude/settings.json
+
+# Claude bridge files (gitignored — they import the framework).
+/CLAUDE.agentic.md
+/CLAUDE.local.md
+
+# .claude runtime locks.
+/.claude/*.lock
+# <<< end agentic-development framework <<<
