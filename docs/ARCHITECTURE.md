@@ -1353,7 +1353,15 @@ playground's runtime.
 
 `make test` runs 881 pytest tests (collected on the P6 tree), then the Node suite. No test needs the network, a key or
 a model. Local-engine tests need mlx-vlm installed (`requirements-mlx.txt`): their fake backend calls mlx-vlm's own
-question checks (OQ-A6).
+question checks (`tests/conftest.py` `mlx_check`).
+
+- On Apple Silicon a missing mlx-vlm fails these tests. **Why.** A renamed mlx-vlm module must not turn the strict fake
+  into silent skips (review P2: lenient fakes hid bugs).
+- Elsewhere, without mlx-vlm, `pytest_runtest_makereport` reports a failed test as skipped when it called `mlx_check`
+  or failed on importing `mlx`, `mlx_vlm`, `huggingface_hub`, `tokenizers`, `transformers` or `numpy`. The run ends
+  with a line that counts them.
+- Two subprocess tests in `test_entrypoint.py` carry the `needs_mlx_vlm` mark: their child process sees no available
+  local engine, which is an assertion failure, not an import error.
 
 | Layer | Files | What is checked |
 |---|---|---|
@@ -1395,9 +1403,9 @@ RQ-3 (§3.10), RQ-4 (§3.1), RQ-6 (§5.5), RQ-9 (§3.5.3) and RQ-10 (§3.6).
   Blocks: the daily limit after a crash that follows a failed save. Owner: the owner.
 - **OQ-A4** — Should the compat server accept `media`, that is audio over the network? It answers 400 today. Blocks:
   UC-6 through whip-insight. Owner: the owner, with WI-1 or a later work-item.
-- **OQ-A5** — How does a `systemone_http` engine on loopback share the local lane and Mac memory with `mlx_local`?
-  Blocks: WI-1 ([backlog/wi-1-p7-systemone-http-and-llm-baseline.md](backlog/wi-1-p7-systemone-http-and-llm-baseline.md)).
-  Owner: WI-1.
-- **OQ-A6** — Should local-engine tests skip, not fail, without mlx-vlm? The fake MLX backend calls mlx-vlm's own
-  question checks (`tests/conftest.py` `mlx_check`). With `requirements.txt` only, pytest gives 90 failed and 9 errors
-  (2026-11-09). Blocks: `make test` off Apple Silicon. Owner: the owner.
+- **OQ-A5** — moved to WI-1 on 2026-11-10: P7.1 step 6 and the memory measurement of the P7.2 spike
+  ([backlog/wi-1-p7-systemone-http-and-llm-baseline.md](backlog/wi-1-p7-systemone-http-and-llm-baseline.md)). The
+  question: how a `systemone_http` engine on loopback shares the local lane and Mac memory with `mlx_local`.
+- **OQ-A6** — resolved 2026-11-10. Off Apple Silicon without mlx-vlm, a test that reached for mlx-vlm is reported as
+  skipped; on Apple Silicon it still fails (§11). Checked with `requirements.txt` only and `platform.machine()` set to
+  `x86_64`: 773 passed, 98 skipped for mlx-vlm, 0 failed.

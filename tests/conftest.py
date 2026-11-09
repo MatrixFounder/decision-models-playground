@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+import platform
 import re
 import threading
 import time
@@ -13,6 +15,49 @@ import yaml
 
 from app.engines.base import BaseEngine
 from app.settings import Settings
+
+# --- tests that need mlx-vlm off Apple Silicon (docs/ARCHITECTURE.md §11, OQ-A6) -------------------------------------
+# Local-engine tests run mlx-vlm's own question checks (mlx_check below), so they need requirements-mlx.txt, which
+# `make setup` installs only on Apple Silicon. There a missing mlx-vlm fails them: a renamed mlx-vlm module must not turn
+# into silent skips. Elsewhere, without mlx-vlm, a test that reached for it is reported as skipped, not failed.
+APPLE_SILICON = platform.system() == "Darwin" and platform.machine() == "arm64"
+HAS_MLX_VLM = importlib.util.find_spec("mlx_vlm") is not None
+SKIP_MLX = not APPLE_SILICON and not HAS_MLX_VLM
+MLX_REASON = "needs mlx-vlm (requirements-mlx.txt, Apple Silicon)"
+MLX_STACK = {"mlx", "mlx_vlm", "huggingface_hub", "tokenizers", "transformers", "numpy"}
+needs_mlx_vlm = pytest.mark.skipif(SKIP_MLX, reason=MLX_REASON)  # for a test whose failure is not an import error
+_mlx_vlm_wanted = threading.Event()  # set by mlx_check, on whatever thread the fake model runs
+_mlx_skipped: list[str] = []
+
+
+def _mlx_import_error(excinfo: pytest.ExceptionInfo | None) -> bool:
+    err = excinfo.value if excinfo else None
+    while err is not None:
+        if isinstance(err, ModuleNotFoundError) and (err.name or "").split(".")[0] in MLX_STACK:
+            return True
+        err = err.__cause__ or err.__context__
+    return False
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+    _mlx_vlm_wanted.clear()
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    rep = outcome.get_result()
+    if SKIP_MLX and rep.failed and (_mlx_vlm_wanted.is_set() or _mlx_import_error(call.excinfo)):
+        rep.outcome = "skipped"
+        rep.longrepr = (str(item.path), item.location[1] + 1, f"Skipped: {MLX_REASON}")
+        if rep.when != "teardown" and item.nodeid not in _mlx_skipped:
+            _mlx_skipped.append(item.nodeid)
+
+
+def pytest_terminal_summary(terminalreporter):
+    if _mlx_skipped:
+        terminalreporter.write_line(f"{len(_mlx_skipped)} local-engine tests skipped: each {MLX_REASON}")
 
 FIX = Path(__file__).parent / "fixtures"
 OR_FIX = FIX / "openrouter"
@@ -137,6 +182,7 @@ class FakeTokenizer:
 def mlx_check(questions: dict) -> None:
     """mlx-vlm's own checks, so the fakes refuse what the real model refuses (review P2: lenient fakes hid bugs).
     A dict `instructions` passes check_question in mlx-vlm (it becomes a media path): the fake flags that too."""
+    _mlx_vlm_wanted.set()  # the test's outcome depends on mlx-vlm (pytest_runtest_makereport above)
     from mlx_vlm.models.d1_lfm3_vl.prompt import as_question, check_question
 
     for name, q in questions.items():
@@ -248,11 +294,14 @@ class FakeBackend:
 @pytest.fixture
 def fake_backend(monkeypatch) -> FakeBackend:
     # the availability checks look at the platform and mlx-vlm: make them pass on any machine
+    import app.compat as compat
     import app.engines.mlx_local as mlx_local
 
     monkeypatch.setattr(mlx_local.platform, "system", lambda: "Darwin")
     monkeypatch.setattr(mlx_local.platform, "machine", lambda: "arm64")
     monkeypatch.setattr(mlx_local, "mlx_vlm_version", lambda: (0, 7, 12))
+    # compat imported the function by name: without this, /health reported the installed mlx-vlm, not the fake one
+    monkeypatch.setattr(compat, "mlx_vlm_version", lambda: (0, 7, 12))
     return FakeBackend()
 
 

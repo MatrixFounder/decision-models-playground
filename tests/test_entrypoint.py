@@ -16,7 +16,7 @@ import httpx
 import pytest
 
 from app.settings import ROOT
-from tests.conftest import load
+from tests.conftest import load, needs_mlx_vlm
 
 PY = Path(sys.executable)
 
@@ -110,6 +110,7 @@ def start_hung(tmp_path: Path, **env: str) -> tuple[subprocess.Popen, dict]:
     return proc, reply
 
 
+@needs_mlx_vlm  # the child's mlx_local engine is available only with mlx-vlm installed
 @pytest.mark.timeout(60)
 def test_one_sigterm_stops_a_process_whose_model_call_hangs(tmp_path):
     """Round 2: SIGTERM ×2 and SIGINT left the process alive. Round 3: the stuck client gets a JSON 429 `busy` at
@@ -129,6 +130,7 @@ def test_one_sigterm_stops_a_process_whose_model_call_hangs(tmp_path):
             proc.kill()
 
 
+@needs_mlx_vlm
 @pytest.mark.timeout(60)
 def test_a_second_sigterm_forces_the_exit(tmp_path):
     """The hard exit of the second signal is `os._exit(1)` after 3 s. The child holds a thread that is neither a

@@ -81,6 +81,11 @@ Both kinds are already declared in `config.example.yaml` (disabled) and in `app/
 6. Cost 0. With `base_url` on loopback the engine joins the local lane in dataset runs and
    experiments (`lane_width`): Ollama and MLX share the Mac's memory and must not load at the same
    time. `timeout_s` for Ollama — 120: the first call loads the model.
+   - The lane runs calls one at a time but frees no memory. Ollama keeps its model loaded after a call
+     (`keep_alive`), and the local model manager does not see it. The MLX model stays loaded until
+     `local.idle_unload_s` (600 s). Both models can be resident at once.
+   - What the lane must also do (nothing, or unload) follows from the P7.2 memory measurement.
+     Moved here from ARCHITECTURE OQ-A5 on 2026-11-10.
 7. `context_tokens` — in the config. Ollama's default window (`num_ctx`) is small and can truncate a
    long call silently (RQ-12); the probe's long step catches it (P7.4).
 8. Engine `compat-self` in `config.example.yaml`: `systemone_http` on the playground's own
@@ -97,7 +102,14 @@ Both kinds are already declared in `config.example.yaml` (disabled) and in `app/
    question → it is d1-2B. Otherwise it is another model and gets its own matrix row.
 3. llama.cpp — optional: `brew install llama.cpp`, `llama-server -hf LiquidAI/d1-3B-GGUF:Q8_0`
    (≈ 3.5 GB). This is a new model, d1-3B, not a second copy of d1-2B.
-4. Result — new rows in SPIKE §5. If the owner does not install Ollama, `systemone_http` is accepted on
+4. Memory with both models resident (P7.1 step 6):
+   1. Load d1-Omni in `mlx_local`, then call `ollama-d1-2b`. Record the process memory of both and the peak
+      on a long state (the MLX peak alone reached 5.6–6.1 GB, SPIKE §2.4).
+   2. Check whether Ollama's `/v1/systemone` accepts `keep_alive`; `keep_alive: 0` should unload the model
+      right after the call.
+   3. Decide. Both fit in 24 GB with margin → the shared lane is enough. Otherwise → before an Ollama call
+      the lane unloads the MLX model, and the engine sends `keep_alive: 0`.
+5. Result — new rows in SPIKE §5. If the owner does not install Ollama, `systemone_http` is accepted on
    `compat-self`.
 
 The Ollama `d1:2b` spike was moved here from P0 by the owner on 2026-11-09; the script is ready, no run

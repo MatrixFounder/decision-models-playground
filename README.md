@@ -26,14 +26,15 @@ running on the Mac.
 1. [What it is for](#what-it-is-for)
 2. [Engines](#engines)
 3. [Requirements](#requirements)
-4. [Quick start](#quick-start)
-5. [Using it](#using-it)
-6. [Make targets](#make-targets)
-7. [Configuration](#configuration)
-8. [Data, privacy and licenses](#data-privacy-and-licenses)
-9. [Relation to whip-insight](#relation-to-whip-insight)
-10. [Documentation](#documentation)
-11. [Project layout](#project-layout)
+4. [Other platforms](#other-platforms)
+5. [Quick start](#quick-start)
+6. [Using it](#using-it)
+7. [Make targets](#make-targets)
+8. [Configuration](#configuration)
+9. [Data, privacy and licenses](#data-privacy-and-licenses)
+10. [Relation to whip-insight](#relation-to-whip-insight)
+11. [Documentation](#documentation)
+12. [Project layout](#project-layout)
 
 ## What it is for
 
@@ -68,14 +69,44 @@ Planned kinds may stay in `config.yaml`: the registry lists them as unavailable.
 ## Requirements
 
 - macOS on Apple Silicon for local models (`make setup` installs `requirements-mlx.txt` only there). The UI,
-  the compat server and cloud engines need only `requirements.txt`. The full `make test` needs mlx-vlm: its
-  local-engine tests use mlx-vlm's own checks.
+  the compat server and cloud engines need only `requirements.txt`; see [Other platforms](#other-platforms).
 - Python 3.14 (the Makefile prefers pyenv 3.14.8, otherwise `python3` on `PATH`). Everything installs
   into the project's `.venv`.
 - An OpenRouter API key for cloud engines.
 - `ffmpeg` for audio uploads (`brew install ffmpeg`).
 - Node.js for the frontend tests (optional: `make test` skips them without `node`).
 - About 4.6 GB of disk for the two 8-bit MLX models; 16–24 GB of RAM.
+
+## Other platforms
+
+The playground is built and tested on macOS with Apple Silicon. Elsewhere it runs with reduced scope.
+
+| Platform | Works | Does not work |
+|---|---|---|
+| macOS, Apple Silicon | everything | — |
+| macOS Intel, Linux | UI, `/api`, cloud engines (`openrouter_decisions`); Workbench, History, Datasets, Experiments, Matrix, turn pointer on cloud engines | local d1 models, see below |
+| Windows (native) | nothing: not supported | use WSL2; the Linux row applies there |
+
+On macOS Intel and Linux:
+
+- `make setup` skips `requirements-mlx.txt`. `mlx_local` engines stay listed as unavailable: "needs macOS on Apple
+  Silicon".
+- The compat server starts but has no local model to serve: `POST /v1/systemone` answers 503 `model_unavailable`,
+  `GET /health` reports `unavailable`. whip-insight cannot use it.
+- Features of local d1 only are unavailable: audio (only d1-Omni hears it; uploads still convert), extraction
+  (`text`, `number`, `date`) and `multi`. OpenRouter refuses these question types.
+- Do not run `make models`, `make smoke-local`, `make spike-mlx`: they need the MLX stack. `make spike-audio` needs
+  the macOS `say` command.
+- `make test` skips the ~98 local-engine tests that need mlx-vlm and says so in its last lines.
+- Durable writes use `fsync` instead of macOS `F_FULLFSYNC`. The compat address on the "Local models" screen is the
+  host name plus `.local`; on Linux mDNS needs Avahi.
+
+Windows: `app/store.py` imports `fcntl` (POSIX only), shutdown uses `loop.add_signal_handler`, and the Makefile needs
+`make`, a POSIX shell and `lsof`.
+
+**Checked how.** Only by simulation on the Mac: `requirements.txt` alone and `platform.machine()` reporting `x86_64`.
+The app imports; pytest gives 773 passed, 98 skipped for mlx-vlm, 0 failed. Nothing was run on a real Linux, Intel Mac
+or Windows machine.
 
 ## Quick start
 
