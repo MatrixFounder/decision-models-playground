@@ -1,0 +1,36 @@
+{
+  "request": {
+    "model": "liquid/d1.1",
+    "state": "Оператор: Здравствуйте, банк «Северный», меня зовут Анна. Ваша заявка номер А-48213 на вклад одобрена.\nКлиент: Отлично. Я хочу положить триста пятьдесят тысяч рублей.\nОператор: Записала: 350 000 рублей. Ещё могу предложить кредитную карту с кешбэком.\nКлиент: Карта не нужна. А страховку к вкладу можно?\nОператор: Да, страховку оформим вместе с вкладом. Приходите в отделение 12 ноября 2026 года, в четверг, к десяти утра.\nКлиент: Договорились, до встречи.",
+    "questions": {
+      "application_id": {
+        "type": "text",
+        "instructions": "Какой номер заявки назвал оператор?"
+      },
+      "callback_agreed": {
+        "type": "noul",
+        "instructions": "Договорился ли клиент о повторном звонке?",
+        "criteria": {
+          "true": "Клиент согласился, чтобы ему перезвонили, или сам назвал время звонка.",
+          "false": "Клиент отказался от повторного звонка, или о нём не говорили."
+        }
+      }
+    },
+    "provider": {
+      "zdr": true,
+      "data_collection": "deny"
+    }
+  },
+  "status": 400,
+  "latency_ms": 185.8,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "error": {
+      "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"application_id\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+      "code": 400
+    },
+    "user_id": "<user_id>"
+  }
+}

@@ -1,0 +1,1089 @@
+{
+  "run_at": "2026-11-09T11:45:23+0300",
+  "public": {
+    "catalog_ids": 35,
+    "catalog_models": {
+      "liquid/d1.1": {
+        "canonical_slug": "liquid/d1.1-20261027",
+        "context_length": 65536,
+        "prompt_price": "0.00000002",
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "expiration_date": null,
+        "endpoints": [
+          "/api/alpha/decisions"
+        ]
+      },
+      "~liquid/d1-latest": {
+        "canonical_slug": "~liquid/d1-latest",
+        "context_length": 65536,
+        "prompt_price": "0.00000002",
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "expiration_date": null,
+        "endpoints": [
+          "/api/alpha/decisions"
+        ]
+      },
+      "typesafe/jev-1.14": {
+        "canonical_slug": "typesafe/jev-1.14-20261014",
+        "context_length": 262144,
+        "prompt_price": "0.000000042",
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "expiration_date": null,
+        "endpoints": [
+          "/api/alpha/decisions"
+        ]
+      }
+    },
+    "zdr_decision_endpoints": {
+      "perplexity/pplx-decider-v1.2": {
+        "name": "Perplexity | perplexity/pplx-decider-v1.2-20261016",
+        "safety_retention": false
+      },
+      "morph/reflex": {
+        "name": "Morph | morph/reflex-20261103",
+        "safety_retention": false
+      },
+      "cloudflare/clairic": {
+        "name": "Cloudflare | cloudflare/clairic-20261029",
+        "safety_retention": false
+      },
+      "baseten/joey-1": {
+        "name": "BaseTen | baseten/joey-1-20261029",
+        "safety_retention": false
+      },
+      "baseten/mammoth-1": {
+        "name": "BaseTen | baseten/mammoth-1-20261021",
+        "safety_retention": false
+      },
+      "baseten/elephant-1": {
+        "name": "BaseTen | baseten/elephant-1-20261021",
+        "safety_retention": false
+      },
+      "liquid/d1.1": {
+        "name": "Liquid | liquid/d1.1-20261027",
+        "safety_retention": false
+      },
+      "cloudflare/clef-flash": {
+        "name": "Cloudflare | cloudflare/clef-flash",
+        "safety_retention": false
+      },
+      "nace-ai/drex-max": {
+        "name": "DeepInfra | nace-ai/drex-max-20261016",
+        "safety_retention": false
+      },
+      "perplexity/pplx-decider-flash-v1.2": {
+        "name": "Perplexity | perplexity/pplx-decider-flash-v1.2-20261016",
+        "safety_retention": false
+      },
+      "liquid/d1-ultra": {
+        "name": "Liquid | liquid/d1-ultra-20261015",
+        "safety_retention": false
+      },
+      "typesafe/jev-1.14": {
+        "name": "TypeSafe | typesafe/jev-1.14-20261014",
+        "safety_retention": false
+      },
+      "jaredpalmer/kev-4b": {
+        "name": "SiliconFlow | jaredpalmer/kev-4b-20260924",
+        "safety_retention": false
+      },
+      "cloudflare/clef": {
+        "name": "Cloudflare | cloudflare/clef",
+        "safety_retention": false
+      },
+      "nace-ai/drex-v1.5": {
+        "name": "DeepInfra | nace-ai/drex-v1.5-20261009",
+        "safety_retention": false
+      },
+      "nace-ai/drex-v2.0": {
+        "name": "DeepInfra | nace-ai/drex-v2.0-20261009",
+        "safety_retention": false
+      },
+      "cloudflare/clef-omni": {
+        "name": "Cloudflare | cloudflare/clef-omni-20261009",
+        "safety_retention": false
+      },
+      "microsoft/microsoft-decision-1": {
+        "name": "Azure | microsoft/microsoft-decision-1-20261009",
+        "safety_retention": false
+      },
+      "upstage/solar-decide-flash": {
+        "name": "Upstage | upstage/solar-decide-flash-20261008",
+        "safety_retention": false
+      },
+      "liquid/d1": {
+        "name": "Liquid | liquid/d1-20260930",
+        "safety_retention": false
+      },
+      "togethercomputer/tev1-4b-experimental": {
+        "name": "Together | togethercomputer/tev1-4b-experimental-20260923",
+        "safety_retention": false
+      },
+      "scaledown/classify-1": {
+        "name": "ScaleDown | scaledown/classify-1-20260928",
+        "safety_retention": false
+      },
+      "upstage/solar-decide": {
+        "name": "Upstage | upstage/solar-decide-20260928",
+        "safety_retention": false
+      },
+      "typesafe/jev-1.13": {
+        "name": "TypeSafe | typesafe/jev-1.13-20260917",
+        "safety_retention": false
+      }
+    },
+    "llm_total": 461,
+    "llm_with_logprobs": 162
+  },
+  "decisions": {
+    "typesafe/jev-1.14": {
+      "core": [
+        {
+          "status": 200,
+          "latency_ms": 465.9,
+          "model": "typesafe/jev-1.14-20261014",
+          "provider": "TypeSafe",
+          "usage": {
+            "input_tokens": 950,
+            "output_tokens": 72,
+            "cost": 3.99e-05,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 3.99e-05,
+              "upstream_inference_prompt_cost": 3.99e-05,
+              "upstream_inference_completions_cost": 0
+            }
+          },
+          "error": null,
+          "answer_types": {
+            "callback_agreed": "noul",
+            "call_topic": "choice",
+            "interest": "score"
+          }
+        },
+        {
+          "status": 200,
+          "latency_ms": 250.1,
+          "model": "typesafe/jev-1.14-20261014",
+          "provider": "TypeSafe",
+          "usage": {
+            "input_tokens": 950,
+            "output_tokens": 72,
+            "cost": 3.99e-05,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 3.99e-05,
+              "upstream_inference_prompt_cost": 3.99e-05,
+              "upstream_inference_completions_cost": 0
+            }
+          },
+          "error": null,
+          "answer_types": {
+            "callback_agreed": "noul",
+            "call_topic": "choice",
+            "interest": "score"
+          }
+        },
+        {
+          "status": 200,
+          "latency_ms": 264.4,
+          "model": "typesafe/jev-1.14-20261014",
+          "provider": "TypeSafe",
+          "usage": {
+            "input_tokens": 950,
+            "output_tokens": 72,
+            "cost": 3.99e-05,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 3.99e-05,
+              "upstream_inference_prompt_cost": 3.99e-05,
+              "upstream_inference_completions_cost": 0
+            }
+          },
+          "error": null,
+          "answer_types": {
+            "callback_agreed": "noul",
+            "call_topic": "choice",
+            "interest": "score"
+          }
+        }
+      ],
+      "core_latency_median_ms": 264.4,
+      "whip_insight": {
+        "status": 200,
+        "latency_ms": 279.0,
+        "model": "typesafe/jev-1.14-20261014",
+        "provider": "TypeSafe",
+        "usage": {
+          "input_tokens": 971,
+          "output_tokens": 176,
+          "cost": 4.0782e-05,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 4.0782e-05,
+            "upstream_inference_prompt_cost": 4.0782e-05,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "std_refund_request": "noul",
+          "call_kind": "choice",
+          "satisfaction": "score",
+          "refund_evidence": "choice"
+        }
+      },
+      "ext_products": {
+        "status": 200,
+        "latency_ms": 261.0,
+        "model": "typesafe/jev-1.14-20261014",
+        "provider": "TypeSafe",
+        "usage": {
+          "input_tokens": 832,
+          "output_tokens": 67,
+          "cost": 3.4944e-05,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 3.4944e-05,
+            "upstream_inference_prompt_cost": 3.4944e-05,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "products": "choice",
+          "callback_agreed": "noul"
+        }
+      },
+      "ext_application_id": {
+        "status": 400,
+        "latency_ms": 93.9,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"application_id\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "ext_amount": {
+        "status": 400,
+        "latency_ms": 71.6,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"amount\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "ext_amount_estimate": {
+        "status": 400,
+        "latency_ms": 72.0,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"amount_estimate\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "ext_visit_date": {
+        "status": 400,
+        "latency_ms": 360.8,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"visit_date\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "box": {
+        "status": 200,
+        "latency_ms": 334.7,
+        "model": "typesafe/jev-1.14-20261014",
+        "provider": "TypeSafe",
+        "usage": {
+          "input_tokens": 577,
+          "output_tokens": 20,
+          "cost": 2.4234e-05,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 2.4234e-05,
+            "upstream_inference_prompt_cost": 2.4234e-05,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "logo": "box"
+        }
+      },
+      "unknown_type": {
+        "status": 400,
+        "latency_ms": 139.6,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"q\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "choice_24": {
+        "status": 200,
+        "latency_ms": 237.6,
+        "model": "typesafe/jev-1.14-20261014",
+        "provider": "TypeSafe",
+        "usage": {
+          "input_tokens": 890,
+          "output_tokens": 260,
+          "cost": 3.738e-05,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 3.738e-05,
+            "upstream_inference_prompt_cost": 3.738e-05,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "dept": "choice"
+        }
+      },
+      "choice_100": {
+        "status": 200,
+        "latency_ms": 260.6,
+        "model": "typesafe/jev-1.14-20261014",
+        "provider": "TypeSafe",
+        "usage": {
+          "input_tokens": 2638,
+          "output_tokens": 1020,
+          "cost": 0.000110796,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 0.000110796,
+            "upstream_inference_prompt_cost": 0.000110796,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "dept": "choice"
+        }
+      },
+      "choice_240": {
+        "status": 200,
+        "latency_ms": 520.5,
+        "model": "typesafe/jev-1.14-20261014",
+        "provider": "TypeSafe",
+        "usage": {
+          "input_tokens": 5998,
+          "output_tokens": 2420,
+          "cost": 0.000251916,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 0.000251916,
+            "upstream_inference_prompt_cost": 0.000251916,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "dept": "choice"
+        }
+      },
+      "choice_255": {
+        "status": 200,
+        "latency_ms": 403.5,
+        "model": "typesafe/jev-1.14-20261014",
+        "provider": "TypeSafe",
+        "usage": {
+          "input_tokens": 6358,
+          "output_tokens": 2570,
+          "cost": 0.000267036,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 0.000267036,
+            "upstream_inference_prompt_cost": 0.000267036,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "dept": "choice"
+        }
+      },
+      "score_10": {
+        "status": 200,
+        "latency_ms": 320.9,
+        "model": "typesafe/jev-1.14-20261014",
+        "provider": "TypeSafe",
+        "usage": {
+          "input_tokens": 731,
+          "output_tokens": 17,
+          "cost": 3.0702e-05,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 3.0702e-05,
+            "upstream_inference_prompt_cost": 3.0702e-05,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "anger": "score"
+        }
+      }
+    },
+    "liquid/d1.1": {
+      "core": [
+        {
+          "status": 200,
+          "latency_ms": 266.3,
+          "model": "liquid/d1.1-20261027",
+          "provider": "Liquid",
+          "usage": {
+            "input_tokens": 394,
+            "output_tokens": 0,
+            "cost": 7.88e-06,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 7.88e-06,
+              "upstream_inference_prompt_cost": 7.88e-06,
+              "upstream_inference_completions_cost": 0
+            }
+          },
+          "error": null,
+          "answer_types": {
+            "callback_agreed": "noul",
+            "call_topic": "choice",
+            "interest": "score"
+          }
+        },
+        {
+          "status": 200,
+          "latency_ms": 350.8,
+          "model": "liquid/d1.1-20261027",
+          "provider": "Liquid",
+          "usage": {
+            "input_tokens": 394,
+            "output_tokens": 0,
+            "cost": 7.88e-06,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 7.88e-06,
+              "upstream_inference_prompt_cost": 7.88e-06,
+              "upstream_inference_completions_cost": 0
+            }
+          },
+          "error": null,
+          "answer_types": {
+            "callback_agreed": "noul",
+            "call_topic": "choice",
+            "interest": "score"
+          }
+        },
+        {
+          "status": 200,
+          "latency_ms": 456.4,
+          "model": "liquid/d1.1-20261027",
+          "provider": "Liquid",
+          "usage": {
+            "input_tokens": 394,
+            "output_tokens": 0,
+            "cost": 7.88e-06,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 7.88e-06,
+              "upstream_inference_prompt_cost": 7.88e-06,
+              "upstream_inference_completions_cost": 0
+            }
+          },
+          "error": null,
+          "answer_types": {
+            "callback_agreed": "noul",
+            "call_topic": "choice",
+            "interest": "score"
+          }
+        }
+      ],
+      "core_latency_median_ms": 350.8,
+      "whip_insight": {
+        "status": 200,
+        "latency_ms": 317.2,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 437,
+          "output_tokens": 0,
+          "cost": 8.74e-06,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 8.74e-06,
+            "upstream_inference_prompt_cost": 8.74e-06,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "std_refund_request": "noul",
+          "call_kind": "choice",
+          "satisfaction": "score",
+          "refund_evidence": "choice"
+        }
+      },
+      "ext_products": {
+        "status": 200,
+        "latency_ms": 292.5,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 312,
+          "output_tokens": 0,
+          "cost": 6.24e-06,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 6.24e-06,
+            "upstream_inference_prompt_cost": 6.24e-06,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "products": "choice",
+          "callback_agreed": "noul"
+        }
+      },
+      "ext_application_id": {
+        "status": 400,
+        "latency_ms": 185.8,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"application_id\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "ext_amount": {
+        "status": 400,
+        "latency_ms": 74.4,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"amount\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "ext_amount_estimate": {
+        "status": 400,
+        "latency_ms": 148.5,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"amount_estimate\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "ext_visit_date": {
+        "status": 400,
+        "latency_ms": 69.1,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"visit_date\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "box": {
+        "status": 400,
+        "latency_ms": 219.9,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "Liquid does not accept box questions; question 1 is a box",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "unknown_type": {
+        "status": 400,
+        "latency_ms": 120.2,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"q\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "choice_24": {
+        "status": 200,
+        "latency_ms": 373.6,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 252,
+          "output_tokens": 0,
+          "cost": 5.04e-06,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 5.04e-06,
+            "upstream_inference_prompt_cost": 5.04e-06,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "dept": "choice"
+        }
+      },
+      "choice_100": {
+        "status": 200,
+        "latency_ms": 469.6,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 860,
+          "output_tokens": 0,
+          "cost": 1.72e-05,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 1.72e-05,
+            "upstream_inference_prompt_cost": 1.72e-05,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "dept": "choice"
+        }
+      },
+      "choice_240": {
+        "status": 200,
+        "latency_ms": 369.3,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 1980,
+          "output_tokens": 0,
+          "cost": 3.96e-05,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 3.96e-05,
+            "upstream_inference_prompt_cost": 3.96e-05,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "dept": "choice"
+        }
+      },
+      "choice_255": {
+        "status": 200,
+        "latency_ms": 396.8,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 2100,
+          "output_tokens": 0,
+          "cost": 4.2e-05,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 4.2e-05,
+            "upstream_inference_prompt_cost": 4.2e-05,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "dept": "choice"
+        }
+      },
+      "score_10": {
+        "status": 200,
+        "latency_ms": 541.3,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 283,
+          "output_tokens": 0,
+          "cost": 5.66e-06,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 5.66e-06,
+            "upstream_inference_prompt_cost": 5.66e-06,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "anger": "score"
+        }
+      }
+    },
+    "~liquid/d1-latest": {
+      "core": [
+        {
+          "status": 200,
+          "latency_ms": 304.2,
+          "model": "liquid/d1.1-20261027",
+          "provider": "Liquid",
+          "usage": {
+            "input_tokens": 394,
+            "output_tokens": 0,
+            "cost": 7.88e-06,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 7.88e-06,
+              "upstream_inference_prompt_cost": 7.88e-06,
+              "upstream_inference_completions_cost": 0
+            }
+          },
+          "error": null,
+          "answer_types": {
+            "callback_agreed": "noul",
+            "call_topic": "choice",
+            "interest": "score"
+          }
+        },
+        {
+          "status": 200,
+          "latency_ms": 294.6,
+          "model": "liquid/d1.1-20261027",
+          "provider": "Liquid",
+          "usage": {
+            "input_tokens": 394,
+            "output_tokens": 0,
+            "cost": 7.88e-06,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 7.88e-06,
+              "upstream_inference_prompt_cost": 7.88e-06,
+              "upstream_inference_completions_cost": 0
+            }
+          },
+          "error": null,
+          "answer_types": {
+            "callback_agreed": "noul",
+            "call_topic": "choice",
+            "interest": "score"
+          }
+        },
+        {
+          "status": 200,
+          "latency_ms": 264.5,
+          "model": "liquid/d1.1-20261027",
+          "provider": "Liquid",
+          "usage": {
+            "input_tokens": 394,
+            "output_tokens": 0,
+            "cost": 7.88e-06,
+            "is_byok": false,
+            "cost_details": {
+              "upstream_inference_cost": 7.88e-06,
+              "upstream_inference_prompt_cost": 7.88e-06,
+              "upstream_inference_completions_cost": 0
+            }
+          },
+          "error": null,
+          "answer_types": {
+            "callback_agreed": "noul",
+            "call_topic": "choice",
+            "interest": "score"
+          }
+        }
+      ],
+      "core_latency_median_ms": 294.6,
+      "whip_insight": {
+        "status": 200,
+        "latency_ms": 318.4,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 437,
+          "output_tokens": 0,
+          "cost": 8.74e-06,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 8.74e-06,
+            "upstream_inference_prompt_cost": 8.74e-06,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "std_refund_request": "noul",
+          "call_kind": "choice",
+          "satisfaction": "score",
+          "refund_evidence": "choice"
+        }
+      },
+      "ext_products": {
+        "status": 200,
+        "latency_ms": 430.7,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 312,
+          "output_tokens": 0,
+          "cost": 6.24e-06,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 6.24e-06,
+            "upstream_inference_prompt_cost": 6.24e-06,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "products": "choice",
+          "callback_agreed": "noul"
+        }
+      },
+      "ext_application_id": {
+        "status": 400,
+        "latency_ms": 75.9,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"application_id\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "ext_amount": {
+        "status": 400,
+        "latency_ms": 142.7,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"amount\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "ext_amount_estimate": {
+        "status": 400,
+        "latency_ms": 80.4,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"amount_estimate\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "ext_visit_date": {
+        "status": 400,
+        "latency_ms": 106.7,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"visit_date\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "box": {
+        "status": 400,
+        "latency_ms": 105.6,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "Liquid does not accept box questions; question 1 is a box",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "unknown_type": {
+        "status": 400,
+        "latency_ms": 121.4,
+        "model": null,
+        "provider": null,
+        "usage": null,
+        "error": {
+          "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [],\n    \"note\": \"No matching discriminator\",\n    \"discriminator\": \"type\",\n    \"options\": [\n      \"noul\",\n      \"choice\",\n      \"score\",\n      \"box\"\n    ],\n    \"path\": [\n      \"questions\",\n      \"q\",\n      \"type\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'noul' | 'choice' | 'score' | 'box'\"\n  }\n]",
+          "code": 400
+        },
+        "answer_types": {}
+      },
+      "choice_24": {
+        "status": 200,
+        "latency_ms": 382.3,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 252,
+          "output_tokens": 0,
+          "cost": 5.04e-06,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 5.04e-06,
+            "upstream_inference_prompt_cost": 5.04e-06,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "dept": "choice"
+        }
+      },
+      "choice_100": {
+        "status": 200,
+        "latency_ms": 311.3,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 860,
+          "output_tokens": 0,
+          "cost": 1.72e-05,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 1.72e-05,
+            "upstream_inference_prompt_cost": 1.72e-05,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "dept": "choice"
+        }
+      },
+      "choice_240": {
+        "status": 200,
+        "latency_ms": 360.8,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 1980,
+          "output_tokens": 0,
+          "cost": 3.96e-05,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 3.96e-05,
+            "upstream_inference_prompt_cost": 3.96e-05,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "dept": "choice"
+        }
+      },
+      "choice_255": {
+        "status": 200,
+        "latency_ms": 369.0,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 2100,
+          "output_tokens": 0,
+          "cost": 4.2e-05,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 4.2e-05,
+            "upstream_inference_prompt_cost": 4.2e-05,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "dept": "choice"
+        }
+      },
+      "score_10": {
+        "status": 200,
+        "latency_ms": 548.6,
+        "model": "liquid/d1.1-20261027",
+        "provider": "Liquid",
+        "usage": {
+          "input_tokens": 283,
+          "output_tokens": 0,
+          "cost": 5.66e-06,
+          "is_byok": false,
+          "cost_details": {
+            "upstream_inference_cost": 5.66e-06,
+            "upstream_inference_prompt_cost": 5.66e-06,
+            "upstream_inference_completions_cost": 0
+          }
+        },
+        "error": null,
+        "answer_types": {
+          "anger": "score"
+        }
+      }
+    },
+    "bad_key": {
+      "status": 401,
+      "body": {
+        "error": {
+          "message": "User not found.",
+          "code": 401
+        }
+      }
+    }
+  },
+  "chat": {
+    "status": 200,
+    "latency_ms": 1065.2,
+    "model": "openai/gpt-4o-mini",
+    "usage": {
+      "prompt_tokens": 231,
+      "completion_tokens": 1,
+      "total_tokens": 232,
+      "cost": 3.525e-05,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 3.525e-05,
+        "upstream_inference_prompt_cost": 3.465e-05,
+        "upstream_inference_completions_cost": 6e-07
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "has_logprobs": true,
+    "content": "B",
+    "error": null
+  }
+}

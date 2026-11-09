@@ -1,0 +1,29 @@
+{
+  "unknown_type": {
+    "raised": "ValueError",
+    "message": "question 'q': \"type\" is one of noul, choice, score, text, number, date, box, boxes, not 'predicate'"
+  },
+  "bool_type": {
+    "raised": "ValueError",
+    "message": "question 'q': \"type\" is one of noul, choice, score, text, number, date, box, boxes, not 'bool'"
+  },
+  "score_one_level": {
+    "raised": "ValueError",
+    "message": "question 'q': a score's \"criteria\" lists 2 to 10 levels, lowest first: [\"Can wait\", \"Today\", \"Now\"]"
+  },
+  "score_eleven_levels": {
+    "raised": "ValueError",
+    "message": "question 'q': a score's \"criteria\" lists 2 to 10 levels, lowest first: [\"Can wait\", \"Today\", \"Now\"]"
+  },
+  "choice_list_criteria": {
+    "raised": "ValueError",
+    "message": "question 'q': a choice's \"criteria\" names the options: {\"billing\": \"Charges and refunds\", \"shipping\": \"Delivery\"}; a list of levels is a score"
+  },
+  "box_without_image": {
+    "raised": "ValueError",
+    "message": "a box or boxes question reads exactly one picture in `media`; this request has 0"
+  },
+  "no_questions": {
+    "raised": null
+  }
+}

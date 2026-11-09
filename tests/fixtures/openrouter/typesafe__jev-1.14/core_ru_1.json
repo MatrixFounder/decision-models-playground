@@ -1,0 +1,94 @@
+{
+  "request": {
+    "model": "typesafe/jev-1.14",
+    "state": "Оператор: Добрый день! Меня зовут Анна, банк «Северный». Удобно говорить?\nКлиент: Да, слушаю.\nОператор: У нас новый вклад «Надёжный», ставка 14 % годовых на полгода. Вам было бы интересно?\nКлиент: Вообще да, я как раз думал, куда положить деньги. Но сейчас за рулём, неудобно.\nОператор: Конечно. Когда вам перезвонить?\nКлиент: Давайте в четверг после шести вечера.\nОператор: Хорошо, перезвоню в четверг после 18:00. Всего доброго!\nКлиент: До свидания.",
+    "questions": {
+      "callback_agreed": {
+        "type": "noul",
+        "instructions": "Договорился ли клиент о повторном звонке?",
+        "criteria": {
+          "true": "Клиент согласился, чтобы ему перезвонили, или сам назвал время звонка.",
+          "false": "Клиент отказался от повторного звонка, или о нём не говорили."
+        }
+      },
+      "call_topic": {
+        "type": "choice",
+        "instructions": "Какова основная тема звонка?",
+        "criteria": {
+          "credit": "Кредит или кредитная карта",
+          "deposit": "Вклад или накопительный счёт",
+          "complaint": "Жалоба клиента на обслуживание"
+        }
+      },
+      "interest": {
+        "type": "score",
+        "instructions": "Насколько клиент заинтересован в предложении?",
+        "criteria": [
+          "Не заинтересован",
+          "Слегка заинтересован",
+          "Заинтересован",
+          "Готов оформить сейчас"
+        ]
+      }
+    },
+    "provider": {
+      "zdr": true,
+      "data_collection": "deny"
+    }
+  },
+  "status": 200,
+  "latency_ms": 250.1,
+  "headers": {
+    "content-type": "application/json",
+    "x-generation-id": "gen-dec-1794213926-j0KHIxgbQm5qRWQ5ysYo"
+  },
+  "body": {
+    "model": "typesafe/jev-1.14-20261014",
+    "answers": {
+      "callback_agreed": {
+        "type": "noul",
+        "noul": 0.99
+      },
+      "call_topic": {
+        "type": "choice",
+        "choice": "deposit",
+        "probabilities": {
+          "credit": 0,
+          "deposit": 1,
+          "complaint": 0
+        },
+        "confidence": 1
+      },
+      "interest": {
+        "type": "score",
+        "score": 1.94,
+        "legend": {
+          "0": "Не заинтересован",
+          "1": "Слегка заинтересован",
+          "2": "Заинтересован",
+          "3": "Готов оформить сейчас"
+        },
+        "probabilities": {
+          "0": 0,
+          "1": 0.06,
+          "2": 0.93,
+          "3": 0.01
+        },
+        "confidence": 0.93
+      }
+    },
+    "usage": {
+      "input_tokens": 950,
+      "output_tokens": 72,
+      "cost": 3.99e-05,
+      "is_byok": false,
+      "cost_details": {
+        "upstream_inference_cost": 3.99e-05,
+        "upstream_inference_prompt_cost": 3.99e-05,
+        "upstream_inference_completions_cost": 0
+      }
+    },
+    "id": "gen-dec-1794213926-j0KHIxgbQm5qRWQ5ysYo",
+    "provider": "TypeSafe"
+  }
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "target_tokens": 2000,
+    "chars": 4524,
+    "input_tokens": 1781,
+    "latency_ms": 870.8,
+    "peak_gb": 2.806,
+    "codeword_given_p": 0.9513558482514369
+  },
+  {
+    "target_tokens": 8000,
+    "chars": 18140,
+    "input_tokens": 6933,
+    "latency_ms": 3863.5,
+    "peak_gb": 2.927,
+    "codeword_given_p": 0.9663000841774566
+  },
+  {
+    "target_tokens": 16000,
+    "chars": 36492,
+    "input_tokens": 13877,
+    "latency_ms": 9400.8,
+    "peak_gb": 3.522,
+    "codeword_given_p": 0.9766324035426619
+  },
+  {
+    "target_tokens": 32000,
+    "chars": 73196,
+    "input_tokens": 27765,
+    "latency_ms": 26770.5,
+    "peak_gb": 5.648,
+    "codeword_given_p": 0.9878909502082259
+  }
+]

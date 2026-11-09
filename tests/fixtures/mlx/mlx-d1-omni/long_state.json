@@ -1,0 +1,34 @@
+[
+  {
+    "target_tokens": 2000,
+    "chars": 4524,
+    "input_tokens": 1781,
+    "latency_ms": 874.0,
+    "peak_gb": 3.269,
+    "codeword_given_p": 0.9623756447184018
+  },
+  {
+    "target_tokens": 8000,
+    "chars": 18140,
+    "input_tokens": 6933,
+    "latency_ms": 3900.7,
+    "peak_gb": 3.391,
+    "codeword_given_p": 0.9617009501415406
+  },
+  {
+    "target_tokens": 16000,
+    "chars": 36492,
+    "input_tokens": 13877,
+    "latency_ms": 9753.0,
+    "peak_gb": 3.986,
+    "codeword_given_p": 0.9609713632490544
+  },
+  {
+    "target_tokens": 32000,
+    "chars": 73196,
+    "input_tokens": 27765,
+    "latency_ms": 27599.8,
+    "peak_gb": 6.112,
+    "codeword_given_p": 0.9598074115438421
+  }
+]

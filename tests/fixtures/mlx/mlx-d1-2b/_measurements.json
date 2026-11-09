@@ -1,0 +1,200 @@
+{
+  "engine": "mlx-d1-2b",
+  "repo": "LiquidAI/d1-2B-MLX-8bit",
+  "started_at": "2026-11-09T11:45:11+0300",
+  "import_ms": 1387.9,
+  "versions": {
+    "python": "3.14.8",
+    "mlx": "0.32.4",
+    "mlx_vlm": "0.7.12",
+    "machine": "arm64",
+    "macos": "26.6.2"
+  },
+  "model": {
+    "repo": "LiquidAI/d1-2B-MLX-8bit",
+    "revision": "3247d0483b11e5da31fa10e7979c23252fbe3580",
+    "path": "/Users/sergey/.cache/huggingface/hub/models--LiquidAI--d1-2B-MLX-8bit/snapshots/3247d0483b11e5da31fa10e7979c23252fbe3580",
+    "disk_gb": 2.081,
+    "commit_date": "2026-11-05T19:38:21+00:00",
+    "snapshot": "LiquidAI/d1-2B-MLX-8bit-20261105"
+  },
+  "memory_before_load": {
+    "active_gb": 0.0,
+    "peak_gb": 0.0,
+    "cache_gb": 0.0,
+    "max_rss_gb": 0.107
+  },
+  "load_ms": 1667.0,
+  "memory_after_load": {
+    "active_gb": 2.064,
+    "peak_gb": 2.064,
+    "cache_gb": 0.0,
+    "max_rss_gb": 0.874
+  },
+  "model_class": "mlx_vlm.models.d1_lfm3_vl.d1.Model",
+  "decision_types": [
+    "noul",
+    "choice",
+    "score",
+    "text",
+    "number",
+    "date",
+    "box",
+    "boxes",
+    "bool"
+  ],
+  "decision_media": [
+    "images"
+  ],
+  "calibration_loaded": true,
+  "core_cold": {
+    "latency_ms": 1293.7,
+    "input_tokens": 392
+  },
+  "core_warm": {
+    "n": 10,
+    "median_ms": 194.0,
+    "min_ms": 192.9,
+    "max_ms": 195.8,
+    "repeat_max_abs_dp": 0.0
+  },
+  "core_score_mean": {
+    "latency_ms": 193.5,
+    "input_tokens": 392
+  },
+  "core_set_size_1": {
+    "latency_ms": 450.7,
+    "input_tokens": 754
+  },
+  "memory_after_core": {
+    "active_gb": 2.064,
+    "peak_gb": 2.406,
+    "cache_gb": 1.108,
+    "max_rss_gb": 0.874
+  },
+  "extensions": {
+    "latency_ms": 290.9,
+    "input_tokens": 456
+  },
+  "extensions_each": {
+    "products": {
+      "latency_ms": 136.7,
+      "input_tokens": 257
+    },
+    "application_id": {
+      "latency_ms": 109.5,
+      "input_tokens": 214
+    },
+    "amount": {
+      "latency_ms": 108.2,
+      "input_tokens": 222
+    },
+    "amount_estimate": {
+      "latency_ms": 122.0,
+      "input_tokens": 245
+    },
+    "visit_date": {
+      "latency_ms": 110.3,
+      "input_tokens": 218
+    }
+  },
+  "whip_insight": {
+    "latency_ms": 211.1,
+    "input_tokens": 435
+  },
+  "validation_errors": {
+    "unknown_type": {
+      "raised": "ValueError",
+      "message": "question 'q': \"type\" is one of noul, choice, score, text, number, date, box, boxes, not 'predicate'"
+    },
+    "bool_type": {
+      "raised": "ValueError",
+      "message": "question 'q': \"type\" is one of noul, choice, score, text, number, date, box, boxes, not 'bool'"
+    },
+    "score_one_level": {
+      "raised": "ValueError",
+      "message": "question 'q': a score's \"criteria\" lists 2 to 10 levels, lowest first: [\"Can wait\", \"Today\", \"Now\"]"
+    },
+    "score_eleven_levels": {
+      "raised": "ValueError",
+      "message": "question 'q': a score's \"criteria\" lists 2 to 10 levels, lowest first: [\"Can wait\", \"Today\", \"Now\"]"
+    },
+    "choice_list_criteria": {
+      "raised": "ValueError",
+      "message": "question 'q': a choice's \"criteria\" names the options: {\"billing\": \"Charges and refunds\", \"shipping\": \"Delivery\"}; a list of levels is a score"
+    },
+    "box_without_image": {
+      "raised": "ValueError",
+      "message": "a box or boxes question reads exactly one picture in `media`; this request has 0"
+    },
+    "no_questions": {
+      "raised": null
+    }
+  },
+  "choice_24": {
+    "latency_ms": 123.5,
+    "input_tokens": 250
+  },
+  "choice_100": {
+    "latency_ms": 411.3,
+    "input_tokens": 858
+  },
+  "choice_240": {
+    "latency_ms": 1006.4,
+    "input_tokens": 1978
+  },
+  "choice_255": {
+    "latency_ms": 1084.6,
+    "input_tokens": 2098
+  },
+  "choice_300": {
+    "latency_ms": 1231.3,
+    "input_tokens": 2458
+  },
+  "score_10": {
+    "latency_ms": 100.9,
+    "input_tokens": 189
+  },
+  "long_state": [
+    {
+      "target_tokens": 2000,
+      "chars": 4524,
+      "input_tokens": 1781,
+      "latency_ms": 870.8,
+      "peak_gb": 2.806,
+      "codeword_given_p": 0.9513558482514369
+    },
+    {
+      "target_tokens": 8000,
+      "chars": 18140,
+      "input_tokens": 6933,
+      "latency_ms": 3863.5,
+      "peak_gb": 2.927,
+      "codeword_given_p": 0.9663000841774566
+    },
+    {
+      "target_tokens": 16000,
+      "chars": 36492,
+      "input_tokens": 13877,
+      "latency_ms": 9400.8,
+      "peak_gb": 3.522,
+      "codeword_given_p": 0.9766324035426619
+    },
+    {
+      "target_tokens": 32000,
+      "chars": 73196,
+      "input_tokens": 27765,
+      "latency_ms": 26770.5,
+      "peak_gb": 5.648,
+      "codeword_given_p": 0.9878909502082259
+    }
+  ],
+  "long_state_stopped": "next step projected at 20.0 GB > 14.0 GB",
+  "memory_after_unload": {
+    "active_gb": 0.0,
+    "peak_gb": 5.648,
+    "cache_gb": 0.0,
+    "max_rss_gb": 0.874
+  },
+  "finished_at": "2026-11-09T11:46:06+0300"
+}

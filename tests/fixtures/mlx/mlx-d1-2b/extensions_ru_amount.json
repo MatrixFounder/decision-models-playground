@@ -1,0 +1,25 @@
+{
+  "request": "extensions_ru_amount",
+  "kwargs": {},
+  "media": null,
+  "latency_ms": 108.2,
+  "response": {
+    "answers": {
+      "amount": {
+        "type": "number",
+        "number": null,
+        "span": [
+          136,
+          165
+        ],
+        "found": 0.9983953252702144,
+        "text": "триста пятьдесят тысяч рублей",
+        "unit": "RUB"
+      }
+    },
+    "usage": {
+      "input_tokens": 222,
+      "output_tokens": 0
+    }
+  }
+}

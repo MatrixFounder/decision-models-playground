@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Decision Playground</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Decision Playground</div>
+    <nav class="tabs">
+      <button data-tab="workbench" class="on" data-i18n="workbench"></button>
+      <button data-tab="history" data-i18n="history"></button>
+    </nav>
+    <div class="spacer"></div>
+    <span id="budget" class="pill mono"></span>
+    <button id="lang" class="ghost" title="Language">EN</button>
+  </header>
+
+  <main>
+    <section id="tab-workbench" class="workbench">
+      <div class="col">
+        <div class="panel">
+          <div class="panel-head">
+            <h2 data-i18n="state"></h2>
+            <div class="seg">
+              <button data-state-mode="text" class="on" data-i18n="text"></button>
+              <button data-state-mode="json" data-i18n="json"></button>
+            </div>
+            <div class="spacer"></div>
+            <select id="preset"></select>
+            <label class="button ghost"><span data-i18n="load_file"></span>
+              <input id="state-file" type="file" accept=".txt,.md,.json,text/plain,application/json" hidden></label>
+          </div>
+          <textarea id="state" rows="12" spellcheck="false"></textarea>
+          <div id="state-info" class="dim small"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2 data-i18n="questions"></h2>
+            <div class="spacer"></div>
+            <button id="q-json" class="ghost">JSON</button>
+            <button id="q-add" class="ghost" data-i18n="add_question"></button>
+          </div>
+          <div id="questions" class="q-list"></div>
+          <textarea id="questions-json" class="mono" rows="18" spellcheck="false" hidden></textarea>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="panel">
+          <div class="panel-head">
+            <h2 data-i18n="engines"></h2>
+            <div class="spacer"></div>
+            <button id="refresh-catalog" class="ghost icon" data-i18n-title="refresh_catalog">↻</button>
+          </div>
+          <div id="engines" class="engines"></div>
+          <div class="run-row">
+            <input id="title" data-i18n-ph="title_ph">
+            <input id="tags" data-i18n-ph="tags_ph">
+          </div>
+          <label id="allow-no-zdr-row" class="small" hidden><input id="allow-no-zdr" type="checkbox"> <span data-i18n="allow_no_zdr"></span></label>
+          <div class="run-row">
+            <span id="estimate" class="mono small"></span>
+            <div class="spacer"></div>
+            <button id="run" class="primary" data-i18n="run"></button>
+          </div>
+          <div id="run-error" class="error small"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2 data-i18n="results"></h2>
+            <div class="spacer"></div>
+            <span id="run-meta" class="dim small mono"></span>
+          </div>
+          <div id="results"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-history" hidden>
+      <div class="panel"><div id="history"></div></div>
+    </section>
+  </main>
+
+  <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

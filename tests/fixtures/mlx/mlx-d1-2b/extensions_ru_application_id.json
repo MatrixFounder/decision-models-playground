@@ -1,0 +1,23 @@
+{
+  "request": "extensions_ru_application_id",
+  "kwargs": {},
+  "media": null,
+  "latency_ms": 109.5,
+  "response": {
+    "answers": {
+      "application_id": {
+        "type": "text",
+        "text": "А-48213",
+        "span": [
+          76,
+          83
+        ],
+        "found": 0.9988450024611791
+      }
+    },
+    "usage": {
+      "input_tokens": 214,
+      "output_tokens": 0
+    }
+  }
+}

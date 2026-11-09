@@ -1,0 +1,3 @@
+# Local d1 models on Apple Silicon only (docs/DESIGN.md §7.3).
+# The d1-2B-MLX and d1-Omni-2B-MLX cards require mlx-vlm >= 0.7.11.
+mlx-vlm>=0.7.11

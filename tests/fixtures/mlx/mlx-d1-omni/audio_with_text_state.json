@@ -1,0 +1,33 @@
+{
+  "request": "audio_with_text_state",
+  "kwargs": {},
+  "media": [
+    {
+      "type": "audio",
+      "path": "tests/fixtures/audio/answering_machine_ru.wav"
+    }
+  ],
+  "latency_ms": 173.3,
+  "response": {
+    "answers": {
+      "call_kind": {
+        "type": "choice",
+        "choice": "network_message",
+        "confidence": 0.38812517572994243,
+        "probabilities": {
+          "conversation": 0.005595341902022805,
+          "answering_machine": 0.2129156997124948,
+          "ivr": 0.14180463624462253,
+          "voice_robot": 0.17740894313445027,
+          "network_message": 0.38812517572994243,
+          "no_speech": 0.007511061981144576,
+          "other": 0.06663914129532261
+        }
+      }
+    },
+    "usage": {
+      "input_tokens": 285,
+      "output_tokens": 0
+    }
+  }
+}

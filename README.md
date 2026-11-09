@@ -4,7 +4,8 @@
 (вероятности, задержка, цена, снимок модели) ложатся рядом. Плюс локальный сервер `POST /v1/systemone`, через который
 стенд whip-insight подключает d1-модели, работающие на Mac.
 
-> **Статус:** дизайн, кода нет (2026-11-09). Подробности — [docs/DESIGN.md](docs/DESIGN.md).
+> **Статус (2026-11-09):** P0 (спайк, [docs/SPIKE.md](docs/SPIKE.md)) и P1 выполнены: Workbench, история и бюджет
+> работают с облачными моделями OpenRouter. Локальные d1 и compat-сервер — P2. План — [docs/DESIGN.md](docs/DESIGN.md) §22.
 
 ## Что это и зачем
 
@@ -40,15 +41,20 @@ Decision-модель (Jev от TypeSafe, d1 от Liquid AI, Microsoft-Decision-
 - Наборы данных: свои файлы, синтетика, тестовые фразы 56 стандартных тегов whip-insight.
 - Бюджет: дневной лимит платных вызовов (`DAILY_BUDGET_USD`, по умолчанию 1 USD), оценка перед каждым прогоном.
 
-## Быстрый старт (план)
+## Быстрый старт
 
 ```bash
-cp .env.example .env               # OPENROUTER_API_KEY, SYSTEMONE_TOKEN
-cp config.example.yaml config.yaml
-make setup                         # venv, зависимости; на Apple Silicon ещё requirements-mlx.txt
-make models                        # скачать включённые MLX-модели в HF_HOME
-make run                           # UI http://127.0.0.1:8790 и compat :8791
+make setup                         # .venv, зависимости (+ requirements-mlx.txt на Apple Silicon), .env и config.yaml из примеров
+$EDITOR .env                       # OPENROUTER_API_KEY; права 600
+make check                         # какие движки готовы, каталог, расход за сегодня
+make run                           # UI http://127.0.0.1:8790
+make test                          # тесты без сети и ключей
 ```
+
+- Workbench: вставить звонок (или выбрать пресет), задать вопросы, отметить движки, «Запустить». Оценка стоимости
+  видна до запуска, расход за день — в шапке.
+- Ссылки: `/?run=<id>` открывает прогон, `/?compare=<id1>,<id2>` сравнивает два.
+- `make models` (скачать MLX-модели) понадобится с P2; compat-сервер `:8791` — тоже P2.
 
 ## Данные и лицензии
 

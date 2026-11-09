@@ -1,0 +1,27 @@
+{
+  "request": "extensions_ru_products",
+  "kwargs": {},
+  "media": null,
+  "latency_ms": 136.7,
+  "response": {
+    "answers": {
+      "products": {
+        "type": "choice",
+        "choices": [
+          "deposit",
+          "insurance"
+        ],
+        "probabilities": {
+          "deposit": 0.9534872586733498,
+          "credit_card": 0.0015489789317735991,
+          "mortgage": 0.000374569959078278,
+          "insurance": 0.8416578073607596
+        }
+      }
+    },
+    "usage": {
+      "input_tokens": 257,
+      "output_tokens": 0
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "request": "extensions_ru",
+  "kwargs": {},
+  "media": null,
+  "latency_ms": 240.1,
+  "response": {
+    "answers": {
+      "products": {
+        "type": "choice",
+        "choices": [
+          "deposit",
+          "insurance"
+        ],
+        "probabilities": {
+          "deposit": 0.8918918918918919,
+          "credit_card": 0.011550544262410933,
+          "mortgage": 0.0006371650162975005,
+          "insurance": 0.8842145373078669
+        }
+      },
+      "application_id": {
+        "type": "text",
+        "text": "А-48213",
+        "span": [
+          76,
+          83
+        ],
+        "found": 0.998433613642902
+      },
+      "amount": {
+        "type": "number",
+        "number": null,
+        "span": [
+          136,
+          165
+        ],
+        "found": 1.0,
+        "text": "триста пятьдесят тысяч рублей",
+        "unit": "RUB"
+      },
+      "amount_estimate": {
+        "type": "number",
+        "number": 110000.0,
+        "interval": [
+          0.0,
+          820000.0
+        ],
+        "unit": null
+      },
+      "visit_date": {
+        "type": "date",
+        "date": "2026-11-12",
+        "span": [
+          375,
+          389
+        ],
+        "found": 0.9946156505152646,
+        "text": "12 ноября 2026"
+      }
+    },
+    "usage": {
+      "input_tokens": 456,
+      "output_tokens": 0
+    }
+  }
+}

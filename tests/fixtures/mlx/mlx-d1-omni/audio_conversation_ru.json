@@ -1,0 +1,33 @@
+{
+  "request": "audio_conversation_ru",
+  "kwargs": {},
+  "media": [
+    {
+      "type": "audio",
+      "path": "tests/fixtures/audio/conversation_ru.wav"
+    }
+  ],
+  "latency_ms": 386.4,
+  "response": {
+    "answers": {
+      "call_kind": {
+        "type": "choice",
+        "choice": "voice_robot",
+        "confidence": 0.46755466759403913,
+        "probabilities": {
+          "conversation": 0.00950878693190817,
+          "answering_machine": 0.11562568793680544,
+          "ivr": 0.03737809651606007,
+          "voice_robot": 0.46755466759403913,
+          "network_message": 0.002559055400871903,
+          "no_speech": 0.00637700381783091,
+          "other": 0.3609967018024843
+        }
+      }
+    },
+    "usage": {
+      "input_tokens": 384,
+      "output_tokens": 0
+    }
+  }
+}

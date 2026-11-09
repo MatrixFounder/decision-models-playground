@@ -1,0 +1,18 @@
+{
+  "request": "audio_spoken_question",
+  "kwargs": {},
+  "media": null,
+  "latency_ms": 63.0,
+  "response": {
+    "answers": {
+      "kind": {
+        "type": "noul",
+        "noul": 0.8634231929260301
+      }
+    },
+    "usage": {
+      "input_tokens": 84,
+      "output_tokens": 0
+    }
+  }
+}

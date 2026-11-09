@@ -1,0 +1,70 @@
+{
+  "request": {
+    "model": "~liquid/d1-latest",
+    "state": "Оператор: Здравствуйте, банк «Северный», меня зовут Анна. Ваша заявка номер А-48213 на вклад одобрена.\nКлиент: Отлично. Я хочу положить триста пятьдесят тысяч рублей.\nОператор: Записала: 350 000 рублей. Ещё могу предложить кредитную карту с кешбэком.\nКлиент: Карта не нужна. А страховку к вкладу можно?\nОператор: Да, страховку оформим вместе с вкладом. Приходите в отделение 12 ноября 2026 года, в четверг, к десяти утра.\nКлиент: Договорились, до встречи.",
+    "questions": {
+      "products": {
+        "type": "choice",
+        "multiple": true,
+        "instructions": "Какие продукты клиент хочет оформить?",
+        "criteria": {
+          "deposit": "Вклад",
+          "credit_card": "Кредитная карта",
+          "mortgage": "Ипотека",
+          "insurance": "Страховка"
+        }
+      },
+      "callback_agreed": {
+        "type": "noul",
+        "instructions": "Договорился ли клиент о повторном звонке?",
+        "criteria": {
+          "true": "Клиент согласился, чтобы ему перезвонили, или сам назвал время звонка.",
+          "false": "Клиент отказался от повторного звонка, или о нём не говорили."
+        }
+      }
+    },
+    "provider": {
+      "zdr": true,
+      "data_collection": "deny"
+    }
+  },
+  "status": 200,
+  "latency_ms": 430.7,
+  "headers": {
+    "content-type": "application/json",
+    "x-generation-id": "gen-dec-1794213936-O5fTclTTbfypsnzIHp00"
+  },
+  "body": {
+    "model": "liquid/d1.1-20261027",
+    "answers": {
+      "products": {
+        "type": "choice",
+        "choice": "deposit",
+        "probabilities": {
+          "deposit": 0.8763630412483285,
+          "credit_card": 0.004579811310943383,
+          "mortgage": 0.002422486395468714,
+          "insurance": 0.1166346610452594
+        },
+        "confidence": 0.835150721664438
+      },
+      "callback_agreed": {
+        "type": "noul",
+        "noul": 0.0011201082639959404
+      }
+    },
+    "usage": {
+      "input_tokens": 312,
+      "output_tokens": 0,
+      "cost": 6.24e-06,
+      "is_byok": false,
+      "cost_details": {
+        "upstream_inference_cost": 6.24e-06,
+        "upstream_inference_prompt_cost": 6.24e-06,
+        "upstream_inference_completions_cost": 0
+      }
+    },
+    "id": "gen-dec-1794213936-O5fTclTTbfypsnzIHp00",
+    "provider": "Liquid"
+  }
+}

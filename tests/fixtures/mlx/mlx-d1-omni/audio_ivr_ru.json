@@ -1,0 +1,33 @@
+{
+  "request": "audio_ivr_ru",
+  "kwargs": {},
+  "media": [
+    {
+      "type": "audio",
+      "path": "tests/fixtures/audio/ivr_ru.wav"
+    }
+  ],
+  "latency_ms": 161.4,
+  "response": {
+    "answers": {
+      "call_kind": {
+        "type": "choice",
+        "choice": "voice_robot",
+        "confidence": 0.7203396319744979,
+        "probabilities": {
+          "conversation": 0.0052551826718924425,
+          "answering_machine": 0.027503098772802628,
+          "ivr": 0.0948324362898053,
+          "voice_robot": 0.7203396319744979,
+          "network_message": 0.004417528338926264,
+          "no_speech": 0.016319897429794013,
+          "other": 0.1313322245222814
+        }
+      }
+    },
+    "usage": {
+      "input_tokens": 237,
+      "output_tokens": 0
+    }
+  }
+}

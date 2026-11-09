@@ -1,0 +1,24 @@
+{
+  "request": "extensions_ru_visit_date",
+  "kwargs": {},
+  "media": null,
+  "latency_ms": 110.3,
+  "response": {
+    "answers": {
+      "visit_date": {
+        "type": "date",
+        "date": null,
+        "span": [
+          375,
+          394
+        ],
+        "found": 0.9890888175694861,
+        "text": "12 ноября 2026 года"
+      }
+    },
+    "usage": {
+      "input_tokens": 218,
+      "output_tokens": 0
+    }
+  }
+}

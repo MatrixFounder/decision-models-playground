@@ -1,0 +1,17 @@
+# Call kind: the seven options of whip-insight SPEC-decision-service.md §8.4 with their fixed descriptions
+# (DESIGN.md §14). Used by the audio mode (UC-6) and the P0 spike.
+id: call_kind
+title: Тип звонка
+source: whip-insight docs/SPEC-decision-service.md §8.4
+questions:
+  call_kind:
+    type: choice
+    instructions: Что происходит на записи?
+    criteria:
+      conversation: "Живой разговор: человек говорит с человеком"
+      answering_machine: Автоответчик или голосовая почта
+      ivr: Голосовое меню или очередь, человека на линии нет
+      voice_robot: Говорит голосовой робот или ассистент
+      network_message: "Сообщение сети: абонент недоступен, занят, номер не обслуживается"
+      no_speech: Нет разборчивой речи
+      other: Ничего из перечисленного

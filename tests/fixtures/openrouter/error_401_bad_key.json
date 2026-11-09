@@ -1,0 +1,13 @@
+{
+  "status": 401,
+  "latency_ms": 519.4,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "error": {
+      "message": "User not found.",
+      "code": 401
+    }
+  }
+}

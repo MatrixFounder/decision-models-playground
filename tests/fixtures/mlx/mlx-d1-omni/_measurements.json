@@ -1,0 +1,242 @@
+{
+  "engine": "mlx-d1-omni",
+  "repo": "LiquidAI/d1-Omni-2B-MLX-8bit",
+  "started_at": "2026-11-09T11:47:01+0300",
+  "import_ms": 741.5,
+  "versions": {
+    "python": "3.14.8",
+    "mlx": "0.32.4",
+    "mlx_vlm": "0.7.12",
+    "machine": "arm64",
+    "macos": "26.6.2"
+  },
+  "model": {
+    "repo": "LiquidAI/d1-Omni-2B-MLX-8bit",
+    "revision": "61f06cdc8d6539c2b33e823f2ee85502b4322247",
+    "path": "/Users/sergey/.cache/huggingface/hub/models--LiquidAI--d1-Omni-2B-MLX-8bit/snapshots/61f06cdc8d6539c2b33e823f2ee85502b4322247",
+    "disk_gb": 2.544,
+    "commit_date": "2026-11-05T19:38:25+00:00",
+    "snapshot": "LiquidAI/d1-Omni-2B-MLX-8bit-20261105"
+  },
+  "memory_before_load": {
+    "active_gb": 0.0,
+    "peak_gb": 0.0,
+    "cache_gb": 0.0,
+    "max_rss_gb": 0.105
+  },
+  "load_ms": 1290.0,
+  "memory_after_load": {
+    "active_gb": 2.527,
+    "peak_gb": 2.527,
+    "cache_gb": 0.0,
+    "max_rss_gb": 2.413
+  },
+  "model_class": "mlx_vlm.models.d1_lfm3_omni.Model",
+  "decision_types": [
+    "noul",
+    "choice",
+    "score",
+    "text",
+    "number",
+    "date",
+    "box",
+    "boxes",
+    "bool"
+  ],
+  "decision_media": [
+    "images",
+    "audio"
+  ],
+  "calibration_loaded": true,
+  "core_cold": {
+    "latency_ms": 336.5,
+    "input_tokens": 392
+  },
+  "core_warm": {
+    "n": 10,
+    "median_ms": 194.5,
+    "min_ms": 193.4,
+    "max_ms": 195.8,
+    "repeat_max_abs_dp": 0.0
+  },
+  "core_score_mean": {
+    "latency_ms": 193.3,
+    "input_tokens": 392
+  },
+  "core_set_size_1": {
+    "latency_ms": 381.8,
+    "input_tokens": 754
+  },
+  "memory_after_core": {
+    "active_gb": 2.527,
+    "peak_gb": 2.87,
+    "cache_gb": 1.11,
+    "max_rss_gb": 2.413
+  },
+  "extensions": {
+    "latency_ms": 240.1,
+    "input_tokens": 456
+  },
+  "extensions_each": {
+    "products": {
+      "latency_ms": 135.6,
+      "input_tokens": 257
+    },
+    "application_id": {
+      "latency_ms": 108.2,
+      "input_tokens": 214
+    },
+    "amount": {
+      "latency_ms": 108.8,
+      "input_tokens": 222
+    },
+    "amount_estimate": {
+      "latency_ms": 121.9,
+      "input_tokens": 245
+    },
+    "visit_date": {
+      "latency_ms": 108.4,
+      "input_tokens": 218
+    }
+  },
+  "whip_insight": {
+    "latency_ms": 211.8,
+    "input_tokens": 435
+  },
+  "validation_errors": {
+    "unknown_type": {
+      "raised": "ValueError",
+      "message": "question 'q': \"type\" is one of noul, choice, score, text, number, date, box, boxes, not 'predicate'"
+    },
+    "bool_type": {
+      "raised": "ValueError",
+      "message": "question 'q': \"type\" is one of noul, choice, score, text, number, date, box, boxes, not 'bool'"
+    },
+    "score_one_level": {
+      "raised": "ValueError",
+      "message": "question 'q': a score's \"criteria\" lists 2 to 10 levels, lowest first: [\"Can wait\", \"Today\", \"Now\"]"
+    },
+    "score_eleven_levels": {
+      "raised": "ValueError",
+      "message": "question 'q': a score's \"criteria\" lists 2 to 10 levels, lowest first: [\"Can wait\", \"Today\", \"Now\"]"
+    },
+    "choice_list_criteria": {
+      "raised": "ValueError",
+      "message": "question 'q': a choice's \"criteria\" names the options: {\"billing\": \"Charges and refunds\", \"shipping\": \"Delivery\"}; a list of levels is a score"
+    },
+    "box_without_image": {
+      "raised": "ValueError",
+      "message": "a box or boxes question reads exactly one picture in `media`; this request has 0"
+    },
+    "no_questions": {
+      "raised": null
+    }
+  },
+  "choice_24": {
+    "latency_ms": 123.9,
+    "input_tokens": 250
+  },
+  "choice_100": {
+    "latency_ms": 408.9,
+    "input_tokens": 858
+  },
+  "choice_240": {
+    "latency_ms": 973.2,
+    "input_tokens": 1978
+  },
+  "choice_255": {
+    "latency_ms": 1128.1,
+    "input_tokens": 2098
+  },
+  "choice_300": {
+    "latency_ms": 1255.2,
+    "input_tokens": 2458
+  },
+  "score_10": {
+    "latency_ms": 100.7,
+    "input_tokens": 189
+  },
+  "audio": {
+    "answering_machine_ru": {
+      "latency_ms": 1759.8,
+      "input_tokens": 261,
+      "peak_gb": 2.795
+    },
+    "conversation_30s_ru": {
+      "latency_ms": 398.1,
+      "input_tokens": 503,
+      "peak_gb": 3.034
+    },
+    "conversation_ru": {
+      "latency_ms": 386.4,
+      "input_tokens": 384,
+      "peak_gb": 2.865
+    },
+    "ivr_ru": {
+      "latency_ms": 161.4,
+      "input_tokens": 237,
+      "peak_gb": 2.813
+    },
+    "network_message_ru": {
+      "latency_ms": 123.6,
+      "input_tokens": 180,
+      "peak_gb": 2.722
+    },
+    "answering_machine_ru_warm_median_ms": 150.1,
+    "conversation_30s_ru_warm_median_ms": 273.3,
+    "with_text_state": {
+      "latency_ms": 173.3,
+      "input_tokens": 285
+    },
+    "spoken_question": {
+      "latency_ms": 63.0,
+      "input_tokens": 84
+    },
+    "waveform_input": {
+      "latency_ms": 150.6,
+      "top": "voice_robot"
+    }
+  },
+  "long_state": [
+    {
+      "target_tokens": 2000,
+      "chars": 4524,
+      "input_tokens": 1781,
+      "latency_ms": 874.0,
+      "peak_gb": 3.269,
+      "codeword_given_p": 0.9623756447184018
+    },
+    {
+      "target_tokens": 8000,
+      "chars": 18140,
+      "input_tokens": 6933,
+      "latency_ms": 3900.7,
+      "peak_gb": 3.391,
+      "codeword_given_p": 0.9617009501415406
+    },
+    {
+      "target_tokens": 16000,
+      "chars": 36492,
+      "input_tokens": 13877,
+      "latency_ms": 9753.0,
+      "peak_gb": 3.986,
+      "codeword_given_p": 0.9609713632490544
+    },
+    {
+      "target_tokens": 32000,
+      "chars": 73196,
+      "input_tokens": 27765,
+      "latency_ms": 27599.8,
+      "peak_gb": 6.112,
+      "codeword_given_p": 0.9598074115438421
+    }
+  ],
+  "long_state_stopped": "next step projected at 20.5 GB > 14.0 GB",
+  "memory_after_unload": {
+    "active_gb": 0.0,
+    "peak_gb": 6.112,
+    "cache_gb": 0.0,
+    "max_rss_gb": 2.413
+  },
+  "finished_at": "2026-11-09T11:48:00+0300"
+}

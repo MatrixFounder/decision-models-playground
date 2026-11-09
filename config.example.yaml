@@ -24,11 +24,11 @@ engines:
   - id: mlx-d1-2b
     kind: mlx_local
     repo: LiquidAI/d1-2B-MLX-8bit     # fp16: LiquidAI/d1-2B-MLX-fp16
-    context_tokens: 65536             # карточка: надёжно до ~64K токенов state
+    context_tokens: 32768             # карточка: до ~64K; на Mac 24 ГБ 64K не помещается (SPIKE §2.4)
   - id: mlx-d1-omni
     kind: mlx_local
     repo: LiquidAI/d1-Omni-2B-MLX-8bit  # fp16: LiquidAI/d1-Omni-2B-MLX-fp16
-    context_tokens: 65536
+    context_tokens: 32768
     audio: true
 
   # --- Готовые серверы /v1/systemone (выключены по умолчанию) ---

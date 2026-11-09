@@ -1,0 +1,124 @@
+{
+  "request": {
+    "model": "liquid/d1.1",
+    "state": "[t1] Оператор: Добрый день, компания «Ромашка», чем могу помочь?\n[t2] Клиент: Здравствуйте, я хочу вернуть деньги за заказ, товар пришёл бракованный.\n[t3] Оператор: Назовите номер заказа, пожалуйста.\n[t4] Клиент: Семь, два, ноль, один, пять.\n[t5] Оператор: Вижу заказ. Оформлю возврат, деньги придут за пять рабочих дней.\n[t6] Клиент: Спасибо, жду.",
+    "questions": {
+      "std_refund_request": {
+        "type": "noul",
+        "instructions": "Есть ли в звонке: Запрос на возврат денег?",
+        "criteria": {
+          "true": "Клиент просит вернуть деньги за товар или услугу.",
+          "false": "Клиент не просит вернуть деньги."
+        }
+      },
+      "call_kind": {
+        "type": "choice",
+        "instructions": "Что происходит на записи?",
+        "criteria": {
+          "conversation": "Живой разговор: человек говорит с человеком",
+          "answering_machine": "Автоответчик или голосовая почта",
+          "ivr": "Голосовое меню или очередь, человека на линии нет",
+          "voice_robot": "Говорит голосовой робот или ассистент",
+          "network_message": "Сообщение сети: абонент недоступен, занят, номер не обслуживается",
+          "no_speech": "Нет разборчивой речи",
+          "other": "Ничего из перечисленного"
+        }
+      },
+      "satisfaction": {
+        "type": "score",
+        "instructions": "Насколько клиент доволен решением?",
+        "criteria": [
+          "Недоволен",
+          "Нейтрален",
+          "Доволен"
+        ]
+      },
+      "refund_evidence": {
+        "type": "choice",
+        "instructions": "В какой реплике клиент просит вернуть деньги?",
+        "criteria": {
+          "t1": null,
+          "t2": null,
+          "t3": null,
+          "t4": null,
+          "t5": null,
+          "t6": null
+        }
+      }
+    },
+    "provider": {
+      "zdr": true,
+      "data_collection": "deny"
+    }
+  },
+  "status": 200,
+  "latency_ms": 317.2,
+  "headers": {
+    "content-type": "application/json",
+    "x-generation-id": "gen-dec-1794213931-rImqD0hW2opxarmVeVmH"
+  },
+  "body": {
+    "model": "liquid/d1.1-20261027",
+    "answers": {
+      "std_refund_request": {
+        "type": "noul",
+        "noul": 0.9996863551005933
+      },
+      "call_kind": {
+        "type": "choice",
+        "choice": "conversation",
+        "probabilities": {
+          "conversation": 0.9664252261292522,
+          "answering_machine": 0.001842483530184976,
+          "ivr": 0.0043071030822617795,
+          "voice_robot": 0.007322743096388241,
+          "network_message": 0.0015712925622740656,
+          "no_speech": 0.0014130559182632815,
+          "other": 0.017118095681375532
+        },
+        "confidence": 0.9608294304841275
+      },
+      "satisfaction": {
+        "type": "score",
+        "score": 1.3530133804241626,
+        "legend": {
+          "0": "Недоволен",
+          "1": "Нейтрален",
+          "2": "Доволен"
+        },
+        "probabilities": {
+          "0": 0.003716533989815186,
+          "1": 0.639553551596207,
+          "2": 0.3567299144139778
+        },
+        "confidence": 0.45933032739431046
+      },
+      "refund_evidence": {
+        "type": "choice",
+        "choice": "t2",
+        "probabilities": {
+          "t1": 0.0005321662542441213,
+          "t2": 0.9976643120055035,
+          "t3": 0.0005046595293890241,
+          "t4": 0.000430379838961217,
+          "t5": 0.0001745908237387184,
+          "t6": 0.0006938915481633012
+        },
+        "confidence": 0.9971971744066043
+      }
+    },
+    "usage": {
+      "input_tokens": 437,
+      "output_tokens": 0,
+      "cost": 8.74e-06,
+      "is_byok": false,
+      "cost_details": {
+        "upstream_inference_cost": 8.74e-06,
+        "upstream_inference_prompt_cost": 8.74e-06,
+        "upstream_inference_completions_cost": 0
+      }
+    },
+    "id": "gen-dec-1794213931-rImqD0hW2opxarmVeVmH",
+    "provider": "Liquid"
+  }
+}

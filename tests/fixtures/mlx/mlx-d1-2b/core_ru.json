@@ -1,0 +1,45 @@
+{
+  "request": "core_ru",
+  "kwargs": {},
+  "media": null,
+  "latency_ms": 1293.7,
+  "response": {
+    "answers": {
+      "callback_agreed": {
+        "type": "noul",
+        "noul": 0.994634357751106
+      },
+      "call_topic": {
+        "type": "choice",
+        "choice": "deposit",
+        "confidence": 0.9861800009269802,
+        "probabilities": {
+          "credit": 0.011402173749627605,
+          "deposit": 0.9861800009269802,
+          "complaint": 0.0024178253233922324
+        }
+      },
+      "interest": {
+        "type": "score",
+        "score": 2.0,
+        "confidence": 0.7228201443270692,
+        "probabilities": {
+          "0": 0.009420400777222582,
+          "1": 0.21196724926491456,
+          "2": 0.7228201443270692,
+          "3": 0.055792205630793595
+        },
+        "legend": {
+          "0": "Не заинтересован",
+          "1": "Слегка заинтересован",
+          "2": "Заинтересован",
+          "3": "Готов оформить сейчас"
+        }
+      }
+    },
+    "usage": {
+      "input_tokens": 392,
+      "output_tokens": 0
+    }
+  }
+}

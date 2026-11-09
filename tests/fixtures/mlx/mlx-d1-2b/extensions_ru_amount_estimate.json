@@ -1,0 +1,23 @@
+{
+  "request": "extensions_ru_amount_estimate",
+  "kwargs": {},
+  "media": null,
+  "latency_ms": 122.0,
+  "response": {
+    "answers": {
+      "amount_estimate": {
+        "type": "number",
+        "number": 150000.0,
+        "interval": [
+          0.0,
+          520000.0
+        ],
+        "unit": null
+      }
+    },
+    "usage": {
+      "input_tokens": 245,
+      "output_tokens": 0
+    }
+  }
+}

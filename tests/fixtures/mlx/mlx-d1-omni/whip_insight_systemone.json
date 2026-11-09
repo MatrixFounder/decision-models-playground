@@ -1,0 +1,60 @@
+{
+  "request": "whip_insight_systemone",
+  "kwargs": {},
+  "media": null,
+  "latency_ms": 211.8,
+  "response": {
+    "answers": {
+      "std_refund_request": {
+        "type": "noul",
+        "noul": 0.9740453163875804
+      },
+      "call_kind": {
+        "type": "choice",
+        "choice": "conversation",
+        "confidence": 0.505146657286038,
+        "probabilities": {
+          "conversation": 0.505146657286038,
+          "answering_machine": 0.013983070683585553,
+          "ivr": 0.01395081610527887,
+          "voice_robot": 0.03071524625807685,
+          "network_message": 0.0025383764696383197,
+          "no_speech": 0.011786505695200915,
+          "other": 0.4218793275021815
+        }
+      },
+      "satisfaction": {
+        "type": "score",
+        "score": 2.0,
+        "confidence": 0.816197163848194,
+        "probabilities": {
+          "0": 0.07976925840503832,
+          "1": 0.10403357774676773,
+          "2": 0.816197163848194
+        },
+        "legend": {
+          "0": "Недоволен",
+          "1": "Нейтрален",
+          "2": "Доволен"
+        }
+      },
+      "refund_evidence": {
+        "type": "choice",
+        "choice": "t2",
+        "confidence": 0.9678014722126,
+        "probabilities": {
+          "t1": 0.0027694643207423616,
+          "t2": 0.9678014722126,
+          "t3": 0.002786303940968509,
+          "t4": 0.014721749514337057,
+          "t5": 0.00815092790520973,
+          "t6": 0.0037700821061423455
+        }
+      }
+    },
+    "usage": {
+      "input_tokens": 435,
+      "output_tokens": 0
+    }
+  }
+}

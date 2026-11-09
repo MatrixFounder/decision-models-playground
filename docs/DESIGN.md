@@ -1,6 +1,9 @@
 # Decision Models Playground — детальный дизайн
 
-> **Статус.** Дизайн, кода нет. Написан 2026-11-09 по ответам владельца того же дня.
+> **Статус.** Дизайн. Написан 2026-11-09 по ответам владельца того же дня. P0 (спайк) выполнен 2026-11-09:
+> результаты и фикстуры — [SPIKE.md](SPIKE.md); пометки «проверить в P0» закрыты, найденные факты внесены в §6–§9,
+> §13, §14, §22, §24. P1 (ядро, `openrouter_decisions`, Workbench, история, бюджет) выполнен 2026-11-09; уточнения —
+> в §6.1, §15, §19, §20.
 >
 > **Источники фактов о моделях.** `whip-insight/docs/audit/decision-models-2026-10-16/README.md` §13 (модели,
 > ZDR, сравнение возможностей), `whip-insight/docs/SPEC-decision-service.md` (контракт `decision/1`, проба
@@ -170,7 +173,8 @@ class DecisionRequest(BaseModel):
     media: list[MediaItem] = []                       # image | audio (только d1-Omni) | video
 ```
 
-- `multi` — внутреннее имя для `choice` с `multiple: true` у d1-2B/d1-Omni.
+- `multi` — внутреннее имя для `choice` с `multiple: true` у d1-2B/d1-Omni. Запрос в форме d1 (`choice` +
+  `multiple: true`) принимается и приводится к `multi`, поэтому JSON из карточек d1 вставляется как есть.
 - Ключ вопроса и id варианта: `^[a-z][a-z0-9_]{0,63}$`, как в whip-insight `decision/1` (§4.1).
 - `choice`: 2–255 вариантов; `score`: 2–10 уровней.
 
@@ -202,7 +206,13 @@ class EngineResult(BaseModel):
 - Проверка ответа, как whip-insight `decision/1` §4.3: вероятности в [0, 1]; у choice/score сумма 1 ± 0.001;
   `top` — один из вариантов. Нарушение → `invalid_answer` для этого вопроса.
 - `vendor_confidence` хранится, но метрики считаются только по `probabilities`: у TypeSafe, Ollama и OpenRouter
-  `confidence` определён по-разному (аудит §3).
+  `confidence` определён по-разному (аудит §3). Замер P0: OpenRouter (Jev 1.14 и d1.1) считает его формулой TypeSafe
+  (choice `(p_max − 1/n)/(1 − 1/n)`, score через MAD), локальные d1 в mlx-vlm — как `p_max`; у одной семьи d1 поле
+  значит разное (SPIKE §3.5).
+- `expected` у `score` движок считает сам из `probabilities` (Σ i·p_i). Поле `score` провайдера не берётся: OpenRouter
+  отдаёт взвешенный индекс, а `system_one` в mlx-vlm по умолчанию — медианный уровень (`score_readout="median"`,
+  SPIKE §2.2).
+- Jev округляет вероятности до 0.01; суммы в P0 всё равно попали в 1 ± 0.001 (SPIKE §3.1).
 
 ### 6.3 Классы отказа
 
@@ -218,6 +228,15 @@ class EngineResult(BaseModel):
 
 Перед вызовом Runner сверяет вопросы с профилем движка (§13): неподдерживаемый вопрос не отправляется, остальные
 идут. Это тот же принцип, что в whip-insight §5.6.4.
+
+Как OpenRouter отказывает на самом деле (P0, SPIKE §3.2):
+
+- Неизвестный тип (`text`, `number`, `date`, любой иной) → 400 на **весь** запрос. `error.message` — JSON-строка
+  ошибки zod `invalid_union` с `path: ["questions", "<ключ>", "type"]`: ключ вопроса извлекается из неё.
+- `box` вне Jev → 400 `"Liquid does not accept box questions; question 1 is a box"`: номер вопроса с 1, не ключ.
+- `choice` с `multiple: true` → **200**, флаг молча игнорируется, ответ — обычный `choice`. Отказа нет, поэтому
+  `multi` в профиле облачного движка задан как «не поддержан» по построению и в OpenRouter не отправляется.
+- Неверный ключ → 401 `{"error": {"message": "User not found.", "code": 401}}`.
 
 ## 7. Движки
 
@@ -248,21 +267,43 @@ class Engine(Protocol):
 - `box` принимает только Jev; иной провайдер отвечает 400 до вызова (схема `DecisionsBoxQuestion`). Плейграунд
   `box` в OpenRouter не шлёт.
 - Модели первой версии: `typesafe/jev-1.14`, `liquid/d1.1`, `~liquid/d1-latest`; остальные — из каталога (§13.2).
+- Замер P0 (SPIKE §3):
+  - `~liquid/d1-latest` отвечает датированным снимком той модели, что ответила: `liquid/d1.1-20261027`.
+  - `usage`: `input_tokens`, `output_tokens`, `cost`, `is_byok`, `cost_details` — без флагов в запросе. d1.1:
+    `output_tokens: 0`; Jev: 72 выходных токена при `upstream_inference_completions_cost: 0`.
+  - Один и тот же запрос Jev считает в 950 входных токенов, d1.1 — в 394: цена между моделями не пропорциональна
+    прайсу за токен.
+  - `noul` приходит без `confidence`, хотя схема его допускает.
+  - Задержка с этого Mac: Jev ≈ 250–470 мс, d1.1 ≈ 265–455 мс; три повтора сдвигают вероятности до 0.03 (Jev) и
+    0.07 (d1.1).
+  - `choice` на 255 вариантов принят обеими моделями.
+  - Схема запроса шире, чем нужно P1: `assets` (картинки по ключу), медиа внутри `state` (`image_url`,
+    `input_audio`, `video_url`), `session_id`, `trace`, `user` (справочник API на 2026-11-09).
 
 ### 7.3 `mlx_local`
 
-- В процессе, через `mlx-vlm >= 0.7.11` (требование карточек d1-2B-MLX и d1-Omni-2B-MLX).
-- Вызов: `model.system_one(state, questions, media=...)` после загрузки модели; аудио — элемент `media`
-  `{"type": "audio", "path": "<wav>"}` или волна `{"type": "audio", "audio": clip, "sampling_rate": 16000}`.
-  **Проверить в P0:** точные имена функций загрузки и вызова для d1-2B и d1-Omni — у d1-3B-MLX карточка показывает
-  `predict(model, processor, state, questions)`, у d1-2B-MLX — `model.system_one(...)`.
+- В процессе, через `mlx-vlm >= 0.7.11` (требование карточек d1-2B-MLX и d1-Omni-2B-MLX); P0 проверен на 0.7.12.
+- Загрузка и вызов (P0, SPIKE §2.1) — одинаковы у d1-2B и d1-Omni:
+  `from mlx_vlm import load; model, processor = load(path)`, затем
+  `model.system_one(state, questions, media=None, score_readout="median", set_size=None)` →
+  `{"answers": {...}, "usage": {"input_tokens": n, "output_tokens": 0}}`. `load()` сам подключает процессор и
+  `calibration.json`. Вызов синхронный: `asyncio.to_thread` под общим `Lock` (§8). `predict(model, processor, …)` —
+  общий decision-API mlx-vlm с другими именами полей, плейграунду не нужен.
+- Аудио — элемент `media` `{"type": "audio", "path": "<wav>"}` (16-bit PCM WAV) или волна `{"type": "audio",
+  "audio": clip, "sampling_rate": 16000}`; голосовой вопрос — такой же элемент в `instructions`. Всё проверено в P0.
 - Ответ d1-2B/d1-Omni использует имена System One (`noul`, `choice` + `confidence` + `probabilities`, `score` +
   `legend`) и расширения: `choices` (multi), `text`/`number`/`date` со `span` и `found`, `number` с `interval`
-  (аудит §13.5).
-- Снимок: `<repo>-<ГГГГММДД даты ревизии HF>`, например `LiquidAI/d1-2B-MLX-8bit-20261027` — такой вид whip-insight
-  читает как датированный (`-[0-9]{8}$`, решение OQ-2/M-9).
+  (аудит §13.5, подтверждено в P0). `span` — символьные смещения в строке `state`. `confidence` — `p_max`.
+  `score` по умолчанию — медианный уровень (целое), поэтому `expected` движок считает сам (§6.2).
+- Модель детерминирована: 10 повторов дали Δp = 0.
+- Локально нет лимита 255 вариантов (300 приняты); пустой `questions` не вызывает ошибку. Проверки запроса — на
+  стороне плейграунда (§9.1).
+- Снимок: `<repo>-<ГГГГММДД даты ревизии HF>`, например `LiquidAI/d1-2B-MLX-8bit-20261105` — такой вид whip-insight
+  читает как датированный (`-[0-9]{8}$`, решение OQ-2/M-9). Дата — `HfApi().model_info(repo, revision=sha).last_modified`
+  для ревизии из кэша; без сети снимок пишется без даты, а не выдумывается.
 - Стоимость 0, `cost_source: none`; `input_tokens` из `usage` модели.
-- Модели первой версии (16–24 ГБ, 8-bit по умолчанию): `LiquidAI/d1-2B-MLX-8bit` (2.22 ГБ), `LiquidAI/d1-Omni-2B-MLX-8bit`.
+- Модели первой версии (16–24 ГБ, 8-bit по умолчанию): `LiquidAI/d1-2B-MLX-8bit` (2.08 ГБ на диске),
+  `LiquidAI/d1-Omni-2B-MLX-8bit` (2.54 ГБ).
   fp16-варианты (`d1-2B-MLX-fp16` 3.84 ГБ, `d1-Omni-2B-MLX-fp16` 4.33 ГБ) включаются в `config.yaml`. Для d1-3B
   карточка измерила 8-bit против float32: 144 из 145 одинаковых лучших ответов (аудит §13.5).
 
@@ -287,7 +328,10 @@ class Engine(Protocol):
      уверенность» и не смешивается с вероятностями.
 - `score` в режиме `logprobs` — распределение по буквам уровней; `multi`, `text`, `number`, `date` — `unsupported`.
 - Ответ LLM может служить эталонной меткой набора (§12.3), с явной пометкой источника.
-- **Проверить в P0:** как OpenRouter отдаёт стоимость чат-вызова (`usage.cost`, нужен ли флаг учёта).
+- Стоимость чат-вызова (P0, SPIKE §4): `usage.cost` приходит в каждом ответе без флагов; `usage: {include: true}`
+  устарел и ни на что не влияет. Режим `logprobs` проверен на `openai/gpt-4o-mini` с ZDR (ответил провайдер Azure):
+  `top_logprobs` по буквам вариантов приходят. `logprobs` в `supported_parameters` объявляют 162 из 461 LLM каталога,
+  но это свойство модели, а не эндпоинта: с ZDR провайдер может оказаться без них, тогда движок падает в `verbal`.
 
 ### 7.6 Реестр и доступность
 
@@ -332,6 +376,12 @@ stateDiagram-v2
   ready --> unloaded: простой, вытеснение
 ```
 
+- Замер P0 (SPIKE §2.3–§2.4): загрузка 1.3–1.7 с; после загрузки 2.06 ГБ (d1-2B) и 2.53 ГБ (d1-Omni) плюс ≈ 1.1 ГБ
+  кэша MLX; тёплый запрос из 3 вопросов — 194 мс. Память растёт с квадратом длины state: 27 765 токенов — пик 5.6–6.1
+  ГБ и 27 с; 64K на 24 ГБ не помещаются, поэтому `context_tokens` локальных моделей — 32 768.
+- Выгрузка: `del model` + `gc.collect()` + `mx.clear_cache()` возвращают память MLX в 0 (проверено в P0).
+- Первый аудио-вызов после загрузки d1-Omni — 1.8 с, дальше 150–275 мс: менеджер прогревает аудио-тракт коротким
+  клипом при загрузке Omni.
 - `local.max_loaded_models: 1`; `local.idle_unload_s: 600`.
 - Запросы к локальной модели идут по одному (очередь `asyncio.Lock`), из UI и из compat-сервера.
 - Вытеснение: запрос к другой модели ждёт конца текущего вызова, затем выгружает текущую.
@@ -354,6 +404,9 @@ stateDiagram-v2
   (`input_tokens`, `output_tokens: 0`, `cost: 0`).
 - Лимиты: тело ≤ 6 МБ; ≤ 64 вопроса; `state` ≤ `context_tokens` модели по оценке 1 токен на символ (как whip-insight
   §7.2); иначе 413.
+- Проверка запроса — до вызова модели и своими правилами: 1–64 вопроса, ключи `^[a-z][a-z0-9_]{0,63}$`, `choice` —
+  2–255 вариантов, `score` — 2–10 уровней. `system_one` не отказывает на пустой `questions` и на 300 вариантов (P0,
+  SPIKE §2.6), а whip-insight рассчитывает на лимиты System One.
 - `GET /health`: `{status, model, state, mlx_vlm_version}` без токена.
 
 ### 9.2 Доступ
@@ -374,7 +427,7 @@ stateDiagram-v2
 | `api_auth_header` | `SYSTEMONE_TOKEN` (голый токен; whip-insight строит `Bearer`) |
 | `require_zdr` | `false` |
 | `input_price_per_mtok` | `0` |
-| `context_tokens` | `65536` |
+| `context_tokens` | `32768` (предел памяти Mac 24 ГБ, P0) |
 
 - M-L1 (путь и имена ответа) выполняется по построению: путь System One, имена System One.
 - M-L2 (достучится ли контейнер skills-executor на VM до `*.local`) остаётся замером того work-item.
@@ -526,6 +579,10 @@ language: ru
   входы, `expiration_date` (аудит §13.10). Без ключа.
 - `GET https://openrouter.ai/api/v1/endpoints/zdr` — ZDR-эндпоинты и `safety_retention` (аудит §13.9).
 - Обновление по кнопке, кэш `probes/catalog.json`.
+- Поля на 2026-11-09 (P0, SPIKE §3.6): у модели каталога `canonical_slug` — датированный снимок
+  (`typesafe/jev-1.14-20261014`; у алиасов `~…` без даты) и `endpoints: ["/api/alpha/decisions"]`; в ZDR-списке
+  `model_id` без даты, снимок только в `name` (`"Liquid | liquid/d1.1-20261027"`). Модель сопоставляется с ZDR по
+  `model_id`.
 - Экран «Матрица возможностей»: строки — модели (каталог + локальные), столбцы — типы, лимиты, контекст, цена, ZDR,
   срок; клетка показывает «есть / нет / не проверено» и дату пробы.
 
@@ -542,7 +599,12 @@ language: ru
   Latin-script languages»; Speech-MASSIVE на слух 63.4 против 85.2 текстом (аудит §13.5). Поэтому длина клипа —
   ось эксперимента (§11).
 - Пресет `call_kind` — 7 вариантов whip-insight §8.4 (`conversation`, `answering_machine`, `ivr`, `voice_robot`,
-  `network_message`, `no_speech`, `other`) с их описаниями.
+  `network_message`, `no_speech`, `other`) с их описаниями: `presets/call_kind.yaml`.
+- Извлечение (P0, SPIKE §2.2): модель находит верный фрагмент, но парсер mlx-vlm не превращает русские формы в
+  значение («12 ноября 2026 года», «12.11.2026», «350 000 рублей», числа словами → `null`). Режим показывает `text` и
+  `span` всегда и добавляет свою RU-нормализацию с пометкой «нормализовано плейграундом».
+- Аудио (P0, SPIKE §2.5): ≈ 12.5 токена на секунду, 30-секундный клип — 273 мс. Синтезированную речь модель слышит как
+  `voice_robot`, поэтому синтетика проверяет тракт, а точность меряется только на записях владельца.
 
 ## 15. HTTP API
 
@@ -564,9 +626,16 @@ UI/API (`127.0.0.1:8790`):
 | `GET /api/local/models`, `POST /api/local/models/{id}/unload` | Менеджер локальных моделей |
 | `GET /api/budget` | Расход за день и лимит |
 | `POST /api/media` | Загрузка картинки или аудио; ответ — id и путь |
+| `POST /api/estimate` | Оценка стоимости прогона по движкам и остаток бюджета, без вызова (добавлен в P1) |
 
 События SSE: `run_started`, `engine_started`, `engine_done`, `engine_failed`, `progress` (наборы, эксперименты),
-`run_done`, `budget_stop`.
+`run_done`, `budget_stop`, `run_error`. Каждый поток кончается ровно одним из `run_done`, `budget_stop`,
+`run_error`. Прогон, запущенный из UI, доживает и сохраняется, даже если вкладку закрыли.
+
+Защита loopback-UI (P1): `TrustedHostMiddleware` (только `127.0.0.1`, `localhost`) против DNS-rebinding; запись с
+чужим `Origin` → 403, потому что прогон тратит деньги, а авторизации нет.
+
+Ссылки UI: `/?run=<id>` открывает прогон, `/?compare=<id1>,<id2>` — сравнение двух, `/?tab=history` — историю.
 
 Compat (`:8791`): `POST /v1/systemone`, `GET /health` (§9).
 
@@ -620,8 +689,12 @@ Vanilla JS-модули, как в OCR Playground; графики — свои �
 
 ## 19. Стоимость и бюджет
 
-- Оценка до вызова: символы `state` и вопросов × цена за входной токен из каталога (1 токен на символ, консервативно,
-  как whip-insight §7.2). LLM: плюс оценка выходных токенов.
+- Оценка до вызова: `(tokens_per_char × символы state и вопросов + overhead_tokens)` × цена за входной токен из
+  каталога; по умолчанию `1.5 × символы + 200` (`budget` в `config.yaml`). Правило «1 токен на символ» не
+  консервативно для Jev: на вызовах P0 Jev выставил 0.95–1.65 токена на символ (варианты `choice` добавляют
+  служебные токены), d1.1 — около 0.43. Новое правило не ниже факта на всех 30 оплаченных вызовах P0 и не выше
+  его в 6 раз (`tests/test_budget.py`). Цена модели не из каталога — максимальная цена decision-модели в каталоге, иначе
+  `fallback_price_per_mtok` (0.2). LLM: плюс оценка выходных токенов (P7).
 - Факт: `usage.cost` ответа (`cost_source: provider`); иначе токены × цена каталога (`price`); иначе `none`.
 - Дневной лимит `DAILY_BUDGET_USD`: прогон, чья оценка превышает остаток, не стартует; при достижении лимита во
   время набора — событие `budget_stop`, остальные элементы помечаются `budget`.
@@ -647,6 +720,7 @@ decision-models-playground/
 │   ├── local_models.py      §8
 │   ├── metrics.py           §12.3
 │   ├── budget.py            §19
+│   ├── catalog.py           §13.2: каталог OpenRouter и ZDR-список, кэш probes/catalog.json (цены нужны с P1)
 │   ├── store.py             runs/, datasets/, probes/, reports/
 │   ├── probe.py             §13
 │   ├── check.py             python -m app.check
@@ -656,7 +730,7 @@ decision-models-playground/
 │       ├── openrouter_llm.py
 │       ├── mlx_local.py
 │       └── systemone_http.py
-├── web/                     index.html, js/*.js, styles.css
+├── web/                     index.html, styles.css, js/: api, i18n, questions, results, history, app
 ├── presets/                 call_kind.yaml, std_tags/*.yaml, synth/*.yaml, probe.yaml
 ├── scripts/                 import_std_tags.py, synth_dialogs.py, record_fixture.py
 ├── tests/                   fixtures/, test_*.py
@@ -680,14 +754,14 @@ decision-models-playground/
 
 | Id | Содержание | Приёмка | Оценка |
 |---|---|---|---|
-| P0 | Спайк: `mlx-vlm` и d1-2B/d1-Omni (загрузка, вызов, имена ответа, аудио, память, задержка); OpenRouter Decisions для `jev-1.14` и `d1.1` с ZDR; Ollama `d1:2b` | `docs/SPIKE.md` и фикстуры без ключей; закрыты пометки «проверить в P0» | 0.5–1 дня |
-| P1 | Ядро: схемы, протокол движка, `openrouter_decisions`, Runner + SSE, Workbench, история, бюджет | UC-1 на трёх облачных моделях | 1.5 дня |
+| P0 ✅ | Спайк: `mlx-vlm` и d1-2B/d1-Omni (загрузка, вызов, имена ответа, аудио, память, задержка); OpenRouter Decisions для `jev-1.14` и `d1.1` с ZDR. Ollama `d1:2b` перенесён в P7 (владелец, 2026-11-09) | `docs/SPIKE.md` и фикстуры без ключей; закрыты пометки «проверить в P0». Выполнен 2026-11-09 | 0.5–1 дня |
+| P1 ✅ | Ядро: схемы, протокол движка, `openrouter_decisions`, Runner + SSE, Workbench, история, бюджет | UC-1 на трёх облачных моделях. Выполнен 2026-11-09: живой прогон `jev-1.14`, `d1.1`, `~d1-latest` с ZDR, повтор и сравнение двух прогонов; 155 тестов без сети | 1.5 дня |
 | P2 | `mlx_local`, менеджер моделей, compat-сервер с токеном | UC-1 с локальной d1; UC-5 с `curl` и запросом-фикстурой whip-insight | 1 день |
 | P3 | Проба и каталог, матрица возможностей | UC-4 на трёх облачных и двух локальных | 1 день |
 | P4 | Наборы, импорт тегов whip-insight, синтетика, метрики, отчёт | UC-3 на `std_answering_machine` (59 фраз) | 1.5 дня |
 | P5 | Эксперименты | UC-2 | 0.5 дня |
 | P6 | Режимы: указатель, извлечение, multi, аудио | UC-6, UC-7, UC-8 | 1.5 дня |
-| P7 | `systemone_http` (Ollama, llama.cpp), `openrouter_llm` (logprobs/verbal) | UC-1 с LLM и Ollama | 1 день |
+| P7 | `systemone_http` (Ollama, llama.cpp), `openrouter_llm` (logprobs/verbal); спайк Ollama `d1:2b` (`scripts/spike/systemone_spike.py`) | UC-1 с LLM и Ollama | 1 день |
 
 Итого около 8–9 рабочих дней. Порядок P0 → P1 → P2 даёт compat-сервер для whip-insight на третьем шаге.
 
@@ -705,11 +779,13 @@ decision-models-playground/
 
 | Id | Риск или вопрос | Как закрывается |
 |---|---|---|
-| RQ-1 | Точный Python API `mlx-vlm` для d1-2B/d1-Omni и имена полей ответа | P0 |
-| RQ-2 | Объём памяти d1-Omni-8bit и задержка с аудио на этом Mac | P0, замер |
+| RQ-1 | Точный Python API `mlx-vlm` для d1-2B/d1-Omni и имена полей ответа | Закрыт в P0: §7.3, SPIKE §2.1–§2.2 |
+| RQ-2 | Объём памяти d1-Omni-8bit и задержка с аудио на этом Mac | Закрыт в P0: 2.53 ГБ, клип 30 с — 273 мс (SPIKE §2.3, §2.5) |
 | RQ-3 | Точность d1-Omni на русской речи и предел длины клипа | Эксперимент §11 на записях владельца |
 | RQ-4 | OpenRouter Decisions — alpha; форма может измениться | Движок изолирует перевод; фикстуры P0 ловят изменение |
-| RQ-5 | Какие LLM дают `logprobs` через OpenRouter | Каталог `supported_parameters`; иначе режим `verbal` |
+| RQ-5 | Какие LLM дают `logprobs` через OpenRouter | 162 из 461 по каталогу на 2026-11-09; `gpt-4o-mini` с ZDR проверен (SPIKE §4). Движок проверяет `logprobs` в ответе, иначе `verbal` |
+| RQ-9 | OpenRouter молча игнорирует `multiple: true` (200, обычный `choice`) | `multi` в облачные движки не отправляется (§6.3) |
+| RQ-10 | Длинный state на локальной d1: память растёт с квадратом длины, 64K на 24 ГБ не помещаются | `context_tokens` 32 768 (§8); при нужде — fp16 не включать, длинные звонки отдавать облаку |
 | RQ-6 | Достучится ли контейнер whip-insight на VM до `*.local` Mac (M-L2) | Work-item подключения dev-профиля |
 | RQ-7 | LM Studio может добавить путь для решений | Тогда это ещё один `systemone_http` без кода |
 | RQ-8 | Лицензия LFM на другой инсталляции | Проверка выручки по README whip-insight |
