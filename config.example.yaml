@@ -1,0 +1,78 @@
+# Decision Models Playground — реестр движков (docs/DESIGN.md §7, §17.2).
+# Скопируйте в config.yaml. Ключи сюда не пишутся: они в .env.
+
+engines:
+  # --- OpenRouter Decisions API (POST https://openrouter.ai/api/alpha/decisions) ---
+  - id: or-jev-1.14
+    kind: openrouter_decisions
+    model: typesafe/jev-1.14          # закреплённая версия
+    zdr: true
+    max_request_bytes: 32000          # держит Jev в обычном режиме контекста (аудит §13.4)
+    concurrency: 4
+  - id: or-d1.1
+    kind: openrouter_decisions
+    model: liquid/d1.1
+    zdr: true
+    concurrency: 4
+  - id: or-d1-latest
+    kind: openrouter_decisions
+    model: "~liquid/d1-latest"        # плавающий алиас; снимок берётся из ответа
+    zdr: true
+    concurrency: 4
+
+  # --- Локальные d1 через mlx-vlm (Apple Silicon) ---
+  - id: mlx-d1-2b
+    kind: mlx_local
+    repo: LiquidAI/d1-2B-MLX-8bit     # fp16: LiquidAI/d1-2B-MLX-fp16
+    context_tokens: 65536             # карточка: надёжно до ~64K токенов state
+  - id: mlx-d1-omni
+    kind: mlx_local
+    repo: LiquidAI/d1-Omni-2B-MLX-8bit  # fp16: LiquidAI/d1-Omni-2B-MLX-fp16
+    context_tokens: 65536
+    audio: true
+
+  # --- Готовые серверы /v1/systemone (выключены по умолчанию) ---
+  - id: ollama-d1-2b
+    kind: systemone_http
+    base_url: http://127.0.0.1:11434/v1/systemone
+    model: "d1:2b"
+    enabled: false
+  - id: llamacpp-d1-3b
+    kind: systemone_http
+    base_url: http://127.0.0.1:8080/v1/systemone   # llama-server -hf LiquidAI/d1-3B-GGUF:Q8_0
+    enabled: false
+
+  # --- LLM-базовая линия (OpenRouter chat completions) ---
+  # id моделей задаёт владелец; одна из них — модель LLM-арбитра whip-insight.
+  - id: llm-cheap
+    kind: openrouter_llm
+    model: "<openrouter model id>"
+    mode: auto                        # auto: logprobs, если модель их объявляет, иначе verbal
+    enabled: false
+  - id: llm-strong
+    kind: openrouter_llm
+    model: "<openrouter model id>"
+    mode: auto
+    enabled: false
+
+local:
+  max_loaded_models: 1                # Mac 16–24 ГБ: одна модель в памяти
+  idle_unload_s: 600
+
+compat:
+  default_model: mlx-d1-2b            # алиас из engines для POST /v1/systemone без поля model
+  max_questions: 64
+  max_body_mb: 6
+  extensions_header: X-Playground-Extensions
+
+audio:
+  max_seconds: 30                     # длинная речь теряет точность (карточка d1-Omni)
+  sample_rate: 16000
+
+calibration:
+  target_accuracy: 0.90               # как whip-insight SPEC §12
+  thresholds: { from: 0.50, to: 0.99, step: 0.01 }
+
+experiments:
+  repeats: 5
+  max_permutations: 6

@@ -1,0 +1,11 @@
+.env
+config.yaml
+.venv/
+__pycache__/
+.pytest_cache/
+# Данные: могут содержать реальные звонки
+runs/
+datasets/
+probes/
+reports/
+media/
