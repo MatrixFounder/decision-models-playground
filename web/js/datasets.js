@@ -160,6 +160,7 @@ export class DatasetsView {
   /** A run starts on an estimate fetched for exactly this request, confirmed when it costs or skips ZDR. */
   async run() {
     if (this.running || !this.selected || !this.picked.size) return false;
+    this.estSeq += 1;  // an estimate still in flight must not land over what the run reports
     const name = this.selected;
     const body = this.body();
     let est;

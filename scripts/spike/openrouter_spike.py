@@ -38,23 +38,31 @@ import httpx
 ROOT = Path(__file__).resolve().parents[2]
 REQ = ROOT / "tests" / "fixtures" / "requests"
 OUT = ROOT / "tests" / "fixtures" / "openrouter"
-BASE = "https://openrouter.ai"
+
 MODELS = ["typesafe/jev-1.14", "liquid/d1.1", "~liquid/d1-latest"]
 PROVIDER = {"zdr": True, "data_collection": "deny"}
 KEEP_HEADERS = {"content-type", "x-generation-id", "openrouter-provider", "x-ratelimit-limit", "x-ratelimit-remaining"}
 UA = {"User-Agent": "decision-models-playground/0.1 (spike)"}
 
 
-def key_from_env() -> str | None:
-    if os.environ.get("OPENROUTER_API_KEY"):
-        return os.environ["OPENROUTER_API_KEY"]
+def env_value(name: str) -> str | None:
+    """From the environment, else from .env — as the app reads its settings."""
+    if os.environ.get(name):
+        return os.environ[name]
     env = ROOT / ".env"
     if env.is_file():
         for line in env.read_text(encoding="utf-8").splitlines():
-            m = re.match(r"\s*OPENROUTER_API_KEY\s*=\s*(.*)\s*$", line)
+            m = re.match(rf"\s*{name}\s*=\s*(.*)\s*$", line)
             if m and m.group(1).strip().strip("'\""):
                 return m.group(1).strip().strip("'\"")
     return None
+
+
+def key_from_env() -> str | None:
+    return env_value("OPENROUTER_API_KEY")
+
+
+BASE = (env_value("OPENROUTER_BASE_URL") or "https://openrouter.ai").rstrip("/")  # the app's OPENROUTER_BASE_URL
 
 
 def load_json(path: Path) -> dict:

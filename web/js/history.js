@@ -62,11 +62,11 @@ export function notWorkbenchMessage(kind) {
   return kind === 'probe' ? t('not_a_compare_run') : t('not_workbench_run', { kind });
 }
 
-/** What a History row offers: a dataset run opens as its report on the Datasets screen — by its id, without
+/** What a History row offers: a dataset run or an experiment opens as its report on its own screen — by its id, without
  * fetching a record that can be megabytes (review P4). Pure. */
 export function rowActions(row) {
   const ok = isWorkbenchRun(row);
-  return { open: ok ? 'run' : row.kind === 'dataset' ? 'report' : null, rerun: ok, pick: ok,
+  return { open: ok ? 'run' : ['dataset', 'experiment'].includes(row.kind) ? 'report' : null, rerun: ok, pick: ok,
     tags: (row.tags || []).filter((g) => g !== row.kind) };
 }
 
@@ -127,7 +127,7 @@ export class History {
           el('td', { class: 'mono nowrap' }, fmtUsd(r.cost_usd)),
           el('td', { class: 'nowrap' },
             el('button', { class: 'ghost', disabled: !can.open,
-              onclick: () => (can.open === 'report' ? this.onOpenReport(r.id) : this.open(r.id)) }, t('open')),
+              onclick: () => (can.open === 'report' ? this.onOpenReport(r.id, r.kind) : this.open(r.id)) }, t('open')),
             el('button', { class: 'ghost', disabled: !can.rerun, onclick: () => this.onRerun(r.id) }, t('rerun'))));
       });
       out.push(el('div', { class: 'table-wrap' }, el('table', { class: 'history' }, el('thead', {}, head), el('tbody', {}, body))));

@@ -65,7 +65,7 @@ def build_report(record: dict[str, Any], target: float = TARGET) -> dict[str, An
         report_items.append({"id": item["id"], "labels": item.get("labels") or {}, "answers": answers,
                              **({"failures": failures} if failures else {})})
     return {
-        "run_id": record["id"], "created_at": record["created_at"], "dataset": record.get("dataset") or {},
+        "kind": "dataset", "run_id": record["id"], "created_at": record["created_at"], "dataset": record.get("dataset") or {},
         "target": target, "cost_usd": record.get("cost_usd"), "budget_stopped": bool(record.get("budget_stopped")),
         "engines": record["engines"],
         "questions": {k: {"type": q["type"], "instructions": q.get("instructions")} for k, q in questions.items()},

@@ -2,6 +2,7 @@
 
 import * as api from './api.js';
 import { DatasetsView } from './datasets.js';
+import { ExperimentsView, reportScreen } from './experiments.js';
 import { History, isWorkbenchRun, notWorkbenchMessage } from './history.js';
 import { applyStatic, getLang, setLang, t } from './i18n.js';
 import { LocalModelsView } from './local.js';
@@ -26,10 +27,14 @@ const ui = {
 };
 
 const editor = new QuestionEditor($('#questions'), () => userEdited());
-const history = new History($('#history'), { onOpen: openRun, onRerun: rerunRun, onOpenReport: (id) => openReport(id) });
+const history = new History($('#history'), { onOpen: openRun, onRerun: rerunRun, onOpenReport: (id, kind) => openReport(id, kind) });
 const localView = new LocalModelsView($('#local'));
 const matrixView = new MatrixView($('#matrix'), { onBudget: () => loadBudget() });
 const datasetsView = new DatasetsView($('#datasets'), { getEngines: () => ui.engines, onBudget: () => loadBudget() });
+const experimentsView = new ExperimentsView($('#experiments'), {
+  getEngines: () => ui.engines, getSelected: () => [...ui.selected], onBudget: () => loadBudget(),
+  getRequest: () => ({ state: currentState(), questions: currentQuestions() }),
+});
 
 // --- storage (a per-viewer convenience: the page works without it) -------------------------------------------------
 function readDraft() {
@@ -252,15 +257,20 @@ async function rerunRun(id) {
 }
 
 /** Show a saved run in the Workbench. The user's draft is kept aside first and can be restored (review P1). */
-/** A dataset run's report on the Datasets screen. */
-function openReport(id) {
+/** A dataset run's report on the Datasets screen, an experiment's on the Experiments screen. */
+function openReport(id, kind) {
+  if (reportScreen(kind) === 'experiments') {
+    switchTab('experiments', { load: false });
+    experimentsView.load().then(() => experimentsView.openReport(id));
+    return;
+  }
   switchTab('datasets', { load: false });
   datasetsView.load().then(() => datasetsView.openReport(id));
 }
 
 function openRun(record) {
-  if (record.kind === 'dataset') {  // /?run=<id> of a dataset run: its report
-    openReport(record.id);
+  if (record.kind === 'dataset' || record.kind === 'experiment') {  // /?run=<id> of either: its report
+    openReport(record.id, record.kind);
     return false;
   }
   if (!isWorkbenchRun(record)) {  // a probe is not a Workbench run (its results are on the matrix)
@@ -375,6 +385,8 @@ function switchTab(tab, { load = true } = {}) {
   $('#tab-local').hidden = tab !== 'local';
   $('#tab-matrix').hidden = tab !== 'matrix';
   $('#tab-datasets').hidden = tab !== 'datasets';
+  $('#tab-experiments').hidden = tab !== 'experiments';
+  if (tab === 'experiments' && load) loadEngines().catch(() => {}).then(() => experimentsView.load());
   if (tab === 'datasets' && load) loadEngines().catch(() => {}).then(() => datasetsView.load());
   if (tab === 'history') history.load();
   if (tab === 'local') localView.load();
@@ -394,6 +406,7 @@ function relabel() {
   if (ui.tab === 'local') localView.render();
   if (ui.tab === 'matrix') matrixView.render();
   if (ui.tab === 'datasets') datasetsView.render();
+  if (ui.tab === 'experiments') experimentsView.render();
   onDraftChange();
 }
 
@@ -411,6 +424,11 @@ async function start() {
   $('#q-add').addEventListener('click', () => editor.add());
   $('#q-json').addEventListener('click', () => setQJson(!ui.qJson));
   $('#run').addEventListener('click', run);
+  $('#to-experiment').addEventListener('click', () => {  // this state and these questions, in an experiment
+    switchTab('experiments', { load: false });
+    experimentsView.takeFromWorkbench();  // ignored while an experiment runs: the panel shows the running grid
+    experimentsView.load();
+  });
   $('#restore-draft').addEventListener('click', restoreDraft);
   syncRestore();
   $('#preset').addEventListener('change', async (e) => { if (e.target.value) await applyPreset(e.target.value); e.target.value = ''; });
@@ -450,11 +468,12 @@ async function start() {
     switchTab('history');
     await history.load();
     await history.compare();
-  } else if (params.get('report')) {  // /?report=<run id> opens a dataset run's report
-    switchTab('datasets', { load: false });
-    await datasetsView.load();
-    await datasetsView.openReport(params.get('report'));
-  } else if (['history', 'local', 'matrix', 'datasets'].includes(params.get('tab'))) switchTab(params.get('tab'));
+  } else if (params.get('report')) {  // /?report=<run id>: a dataset run's or an experiment's report
+    try {  // the kind from the index, then the report once on its own screen (review P5)
+      const { kind } = await api.reportKind(params.get('report'));
+      openReport(params.get('report'), kind);
+    } catch (e) { $('#run-error').textContent = e.message; }
+  } else if (['history', 'local', 'matrix', 'datasets', 'experiments'].includes(params.get('tab'))) switchTab(params.get('tab'));
 }
 
 start();

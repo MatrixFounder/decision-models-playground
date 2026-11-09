@@ -63,7 +63,8 @@ def main() -> None:
                                              timeout_graceful_shutdown=5)))
         print(f"Decision Models Playground → http://{settings.app_host}:{settings.app_port}")
     if not args.no_compat:
-        registry = Registry(settings, Catalog(settings.probes_dir / "catalog.json"), local=local)
+        registry = Registry(settings, Catalog(settings.probes_dir / "catalog.json", base=settings.openrouter_base_url),
+                            local=local)
         compat = create_compat_app(registry)
         servers.append(Server(uvicorn.Config(compat, host=settings.compat_host, port=settings.compat_port,
                                              log_level="info", timeout_graceful_shutdown=5)))

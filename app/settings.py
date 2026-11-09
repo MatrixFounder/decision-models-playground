@@ -25,10 +25,31 @@ def is_loopback(host: str) -> bool:
         return False
 
 
+OPENROUTER_BASE = "https://openrouter.ai"
+
+
+def check_base_url(url: str, name: str) -> str:
+    """An HTTP root the OpenRouter key is sent to: https, or http only to this Mac (a local gateway); no credentials,
+    query or fragment in it. Returned without a trailing slash: paths are appended to it."""
+    from urllib.parse import urlsplit
+
+    raw = (url or "").strip()
+    parts = urlsplit(raw)
+    if parts.scheme not in ("https", "http") or not parts.hostname:
+        raise ValueError(f"{name} is an http(s) URL such as {OPENROUTER_BASE}, not {raw!r}")
+    if parts.scheme == "http" and not is_loopback(parts.hostname):
+        raise ValueError(f"{name}: the OpenRouter key goes to this address — https, or http only to 127.0.0.1 or "
+                         f"localhost (a local gateway)")
+    if parts.username or parts.password or parts.query or parts.fragment:
+        raise ValueError(f"{name}: no user, password, query or fragment in the URL")
+    return f"{parts.scheme}://{parts.netloc}{parts.path.rstrip('/')}"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ROOT / ".env", env_file_encoding="utf-8", extra="ignore")
 
     openrouter_api_key: SecretStr | None = None
+    openrouter_base_url: str = OPENROUTER_BASE  # a proxy or a gateway (LiteLLM…) instead of OpenRouter itself
     systemone_token: SecretStr | None = None
     app_host: str = "127.0.0.1"
     app_port: int = 8790
@@ -44,6 +65,11 @@ class Settings(BaseSettings):
     @classmethod
     def _blank_is_none(cls, v):
         return None if isinstance(v, str) and not v.strip() else v
+
+    @field_validator("openrouter_base_url", mode="before")
+    @classmethod
+    def _base_url(cls, v):
+        return check_base_url(v if isinstance(v, str) and v.strip() else OPENROUTER_BASE, "OPENROUTER_BASE_URL")
 
     @field_validator("data_dir", "config_path", mode="after")
     @classmethod

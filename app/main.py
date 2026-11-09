@@ -27,6 +27,7 @@ from app.dataset_run import DATASET_TERMINAL, DatasetRunIn, DatasetRunner
 from app.datasets import DatasetError, DatasetExists, DatasetNotFound, DatasetStore, DatasetUpload, parse_items
 from app.engines.base import BaseEngine
 from app.engines.mlx_local import MlxLocal
+from app.experiments import EXPERIMENT_TERMINAL, ExperimentError, ExperimentIn, ExperimentRunner, check_size
 from app.local_models import LocalModels, make_local
 from app.presets import PresetError, PresetNotFound, list_presets, load_preset
 from app.probe import PROBE_TERMINAL, PROBED_KINDS, ProbeIn, Prober, matrix_rows, valid_engine_id
@@ -35,6 +36,8 @@ from app.reports import build_report, render_markdown
 from app.runner import TERMINAL, Runner, RunRejected, sse
 from app.schemas import RunIn, RunOptions
 from app.settings import ROOT, UI_HOSTS, Settings, get_settings, is_loopback
+from app.stability import build_stability
+from app.stability import render_markdown as stability_markdown
 from app.store import Store
 
 WEB = ROOT / "web"
@@ -68,7 +71,7 @@ def compat_address(host: str) -> str:
 
 def build_state(settings: Settings, transport=None, local: LocalModels | None = None) -> dict[str, Any]:
     settings.ensure_dirs()
-    catalog = Catalog(settings.probes_dir / "catalog.json")
+    catalog = Catalog(settings.probes_dir / "catalog.json", base=settings.openrouter_base_url)
     config, _ = load_config(settings.config_path)
     owns_local = local is None
     if local is None:
@@ -80,8 +83,10 @@ def build_state(settings: Settings, transport=None, local: LocalModels | None = 
     runner = Runner(registry, store, budget)
     datasets = DatasetStore(settings.data_dir / "datasets")
     dataset_runner = DatasetRunner(runner, datasets, store, budget, settings.data_dir / "reports")
+    experiment_runner = ExperimentRunner(runner, store, budget)
     return {"settings": settings, "catalog": catalog, "registry": registry, "store": store, "budget": budget,
             "runner": runner, "prober": prober, "datasets": datasets, "dataset_runner": dataset_runner,
+            "experiment_runner": experiment_runner,
             "tasks": set(), "local": local,
             "owns_local": owns_local}
 
@@ -290,6 +295,8 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
         record = st(request).store.get(run_id)
         if record is None:
             raise HTTPException(404, "run not found")
+        if record.get("kind", "compare") != "compare":  # an experiment's base request is not the experiment (review P5)
+            raise HTTPException(400, f"a {record['kind']} record is not a Workbench run: it cannot be repeated here")
         try:
             run_in = RunIn(request=record["request"], engines=[e["engine_id"] for e in record["engines"]],
                            tags=record.get("tags", []), title=record.get("title"), options=options or RunOptions())
@@ -386,7 +393,7 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
     async def estimate_dataset(request: Request, name: str, run_in: DatasetRunIn) -> dict[str, Any]:
         state = st(request)
         ds, engines = dataset_run_parts(request, name, run_in)
-        return state.dataset_runner.estimate(ds, engines, state.dataset_runner.items(ds, run_in))
+        return await asyncio.to_thread(state.dataset_runner.estimate, ds, engines, run_in)  # 5 000 items: off the loop
 
     @app.post("/api/datasets/{name}/run")
     async def run_dataset(request: Request, name: str, run_in: DatasetRunIn) -> StreamingResponse:
@@ -395,20 +402,56 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
         return stream_events(request, lambda emit: state.dataset_runner.execute(ds, engines, run_in, emit),
                              DATASET_TERMINAL, "run_error")
 
+    # --- experiments (DESIGN §11) -------------------------------------------------------------------------------------
+    def experiment_parts(request: Request, exp: ExperimentIn):
+        state = st(request)
+        try:
+            return state.runner.engines_for(exp.engines)
+        except RunRejected as e:
+            raise HTTPException(400, str(e)) from None
+
+    @app.post("/api/experiments/estimate")
+    async def estimate_experiment(request: Request, exp: ExperimentIn) -> dict[str, Any]:
+        engines = experiment_parts(request, exp)
+        try:  # off the loop: the grid re-reads the state per cell; the cap is checked before it is built
+            return await asyncio.to_thread(st(request).experiment_runner.estimate, exp, engines)
+        except ExperimentError as e:
+            raise HTTPException(400, str(e)) from None
+
+    @app.post("/api/experiments")
+    async def run_experiment(request: Request, exp: ExperimentIn) -> StreamingResponse:
+        state = st(request)
+        engines = experiment_parts(request, exp)
+        try:
+            check_size(exp, len(engines))  # the grid's limit answers 400 before anything streams (arithmetic only)
+        except ExperimentError as e:
+            raise HTTPException(400, str(e)) from None
+        return stream_events(request, lambda emit: state.experiment_runner.execute(exp, engines, emit),
+                             EXPERIMENT_TERMINAL, "run_error")
+
     @app.get("/api/reports/{run_id}")
     async def report(request: Request, run_id: str, format: str = "json", lang: str = "ru", target: float = 0.9):
+        if format == "kind":  # which screen opens it: from the index, without reading or building a report (review P5)
+            row = next((r for r in st(request).store.rows() if r.get("id") == run_id), None)
+            if row is None or row.get("kind") not in ("dataset", "experiment"):
+                raise HTTPException(404, "no dataset run or experiment with this id")
+            return {"run_id": run_id, "kind": row["kind"]}
         record = st(request).store.get(run_id)
-        if record is None or record.get("kind") != "dataset":
-            raise HTTPException(404, "no dataset run with this id")
-        if not 0.5 <= target <= 0.99:
+        if record is None or record.get("kind") not in ("dataset", "experiment"):
+            raise HTTPException(404, "no dataset run or experiment with this id")
+        if record["kind"] == "dataset" and not 0.5 <= target <= 0.99:  # a target means nothing to an experiment
             raise HTTPException(400, "target is between 0.5 and 0.99")
         if format not in ("json", "md"):
-            raise HTTPException(400, "format is json or md")
+            raise HTTPException(400, "format is json, md or kind")
         # off the event loop: a 5 000-item report takes seconds, and the compat server shares this loop (review P4)
-        rep = await asyncio.to_thread(build_report, record, target)
+        if record["kind"] == "experiment":
+            rep = await asyncio.to_thread(build_stability, record)
+            name, render = f"experiment-{record['day']}-{run_id}.md", stability_markdown
+        else:
+            rep = await asyncio.to_thread(build_report, record, target)
+            name, render = f"{record['dataset']['name']}-{record['day']}-{run_id}.md", render_markdown
         if format == "md":
-            name = f"{record['dataset']['name']}-{record['day']}-{run_id}.md"
-            text = await asyncio.to_thread(render_markdown, rep, lang)
+            text = await asyncio.to_thread(render, rep, lang)
             return PlainTextResponse(text, media_type="text/markdown; charset=utf-8",
                                      headers={"Content-Disposition": f'attachment; filename="{name}"'})
         return rep

@@ -14,6 +14,7 @@
       <button data-tab="workbench" class="on" data-i18n="workbench"></button>
       <button data-tab="history" data-i18n="history"></button>
       <button data-tab="datasets" data-i18n="datasets"></button>
+      <button data-tab="experiments" data-i18n="experiments"></button>
       <button data-tab="matrix" data-i18n="matrix"></button>
       <button data-tab="local" data-i18n="local_models"></button>
     </nav>
@@ -70,6 +71,7 @@
           <div class="run-row">
             <span id="estimate" class="mono small"></span>
             <div class="spacer"></div>
+            <button id="to-experiment" class="ghost" data-i18n="ex_open" data-i18n-title="ex_open_hint"></button>
             <button id="run" class="primary" data-i18n="run"></button>
           </div>
           <div id="run-error" class="error small"></div>
@@ -92,6 +94,10 @@
 
     <section id="tab-datasets" hidden>
       <div id="datasets"></div>
+    </section>
+
+    <section id="tab-experiments" hidden>
+      <div id="experiments"></div>
     </section>
 
     <section id="tab-matrix" hidden>

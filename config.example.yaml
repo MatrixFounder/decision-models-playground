@@ -2,7 +2,8 @@
 # Скопируйте в config.yaml. Ключи сюда не пишутся: они в .env.
 
 engines:
-  # --- OpenRouter Decisions API (POST https://openrouter.ai/api/alpha/decisions) ---
+  # --- OpenRouter Decisions API (POST <OPENROUTER_BASE_URL>/api/alpha/decisions) ---
+  # base_url: https://gw.example.com/openrouter   # свой корень для одного движка (прокси, шлюз); иначе из .env
   - id: or-jev-1.14
     kind: openrouter_decisions
     model: typesafe/jev-1.14          # закреплённая версия

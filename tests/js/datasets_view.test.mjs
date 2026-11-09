@@ -152,3 +152,18 @@ test('confusion rows: a row per label seen, the diagonal marked', () => {
   assert.deepEqual(rows, [{ label: 'a', counts: [3, 1, 0], diag: 0 }, { label: 'c', counts: [0, 0, 2], diag: 2 }]);
   assert.deepEqual(confusionRows(null), []);
 });
+
+test('an estimate in flight does not overwrite what a failed run reported', async () => {
+  let release;
+  const slow = new Promise((r) => { release = r; });
+  let first = true;
+  const client = fakeApi({ estimateDataset: () => (first ? (first = false, slow) : Promise.reject(new Error('400 no engine'))) });
+  const v = view(client);
+  v.selected = 'am';
+  v.picked = new Set(['or-d1.1']);
+  const pending = v.estimate();
+  assert.equal(await v.run(), false);
+  release({ calls: 4, total_usd: 0.01, budget: { remaining_usd: 1 } });
+  await pending;
+  assert.equal(v.estError, '400 no engine');
+});

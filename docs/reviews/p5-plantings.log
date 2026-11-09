@@ -1,0 +1,40 @@
+# P5 fix round: builder plantings in a copy of the tree (restore verified by sha256 after each; copy identical after all)
+RED   F1 extraction reads P(found)  restore-ok  FAILED tests/test_experiments.py::test_extraction_questions_do_not_break_the_report
+RED   F1 top_of total on nothing  restore-ok  FAILED tests/test_stability.py::test_one_repeat_has_no_spread_and_nothing_answered_is_empty
+RED   F2 expected share, not 1/n  restore-ok  FAILED tests/test_stability.py::test_choice_metrics_by_hand - assert 0.3333 =...
+RED   F2 screen reads the expected share  restore-ok  ✖ a pull to the first place is read against the expected share and the lift, not 1/n (0.433917ms); ✖ failing tests:
+RED   F3 own orders, never with itself  restore-ok  FAILED tests/test_stability.py::test_a_cycled_question_is_never_compared_with_itself
+RED   F4 wordings in the base order  restore-ok  FAILED tests/test_experiments.py::test_a_formulation_is_asked_in_the_base_order
+RED   F5 cap before the grid is built  restore-ok  FAILED tests/test_experiments.py::test_too_large_a_grid_is_refused_before_the_stream
+RED   F5 one estimate per cell  restore-ok  FAILED tests/test_experiments.py::test_the_estimate_reads_each_cell_once_and_off_the_loop
+RED   F5 estimate off the loop  restore-ok  FAILED tests/test_experiments.py::test_the_estimate_reads_each_cell_once_and_off_the_loop
+RED   F6/X7 unsaved experiment charged  restore-ok  FAILED tests/test_experiments.py::test_an_unsaved_experiment_is_charged_and_released
+RED   F6/X14 report failure ends the run  restore-ok  FAILED tests/test_experiments.py::test_a_report_that_cannot_be_built_still_ends_the_experiment
+RED   F7/W2 changed grid not sent  restore-ok  ✖ a grid changed while its estimate was on the way is not sent (0.496417ms); ✖ failing tests:
+RED   F7/W3 no second run after the confirm  restore-ok  ✖ a run started while the confirm was open is not doubled (0.452667ms); ✖ failing tests:
+RED   F8 repeat-major jobs  restore-ok  FAILED tests/test_stability.py::test_the_grid_is_formulations_by_orders_by_repeats
+RED   F9 sample variance  restore-ok  FAILED tests/test_stability.py::test_choice_metrics_by_hand - AssertionError:...
+RED   F10 no argmax share for multi  restore-ok  FAILED tests/test_stability.py::test_multi_reads_the_lift_not_the_argmax - as...
+RED   F10 the lift  restore-ok  FAILED tests/test_stability.py::test_choice_metrics_by_hand - assert None == ...
+RED   F12 no rerun of an experiment  restore-ok  FAILED tests/test_experiments.py::test_an_experiment_is_not_rerun_as_a_compare
+RED   F13 target for datasets only  restore-ok  FAILED tests/test_experiments.py::test_the_report_kind_and_target - Assertion...
+RED   F14 kind from the index  restore-ok  FAILED tests/test_experiments.py::test_the_report_kind_and_target - Assertion...
+RED   F15 report carries its request  restore-ok  FAILED tests/test_experiments.py::test_the_report_kind_and_target - TypeError...
+RED   F15 opening does not read the Workbench  restore-ok  ✖ opening the screen or a report does not read the Workbench; "same settings" takes the report's (0.478417ms); ✖ failing tests:
+RED   F16 nothing taken mid-run  restore-ok  ✖ nothing is taken from the Workbench while an experiment runs (0.43675ms); ✖ failing tests:
+RED   F17 old estimate error cleared  restore-ok  ✖ no engine picked: an old estimate error does not stay (0.436417ms); ✖ failing tests:
+RED   F18/X5 exactly 2000 calls  restore-ok  FAILED tests/test_experiments.py::test_exactly_2000_calls_is_allowed_and_the_limits_are_pinned
+RED   F18/X12 repeats up to 20  restore-ok  FAILED tests/test_experiments.py::test_exactly_2000_calls_is_allowed_and_the_limits_are_pinned
+RED   F18/X3 media on every call  restore-ok  FAILED tests/test_experiments.py::test_the_media_goes_with_every_call - asser...
+RED   F18/S2 ties by the base order  restore-ok  FAILED tests/test_stability.py::test_ties_go_to_the_base_order_not_the_shown_one
+RED   F18/S8 failed calls counted  restore-ok  FAILED tests/test_experiments.py::test_failed_calls_count_in_calls_not_in_answered
+RED   F18/B9 refused questions cost nothing  restore-ok  FAILED tests/test_experiments.py::test_the_estimate_leaves_out_questions_the_profile_refuses
+RED   F18/W10 a report on its own screen  restore-ok  ✖ a report opens on its own screen (0.483708ms); ✖ failing tests:
+RED   F19 one question set per batch  restore-ok  FAILED tests/test_experiments.py::test_a_batch_refuses_jobs_with_other_questions
+RED   F1 unmeasured answers counted  restore-ok  FAILED tests/test_experiments.py::test_extraction_questions_do_not_break_the_report
+RED   URL http only on this Mac  restore-ok  FAILED tests/test_base_url.py::test_refused_roots[http://gw.lan:4000-https, or http only]
+RED   URL no credentials  restore-ok  FAILED tests/test_base_url.py::test_refused_roots[https://user:pass@gw.example.com-no user]
+RED   URL engine base_url checked  restore-ok  FAILED tests/test_base_url.py::test_an_engine_can_have_its_own_root - Asserti...
+RED   URL engine's own root  restore-ok  FAILED tests/test_base_url.py::test_an_engine_can_have_its_own_root - Asserti...
+RED   URL calls follow the setting  restore-ok  FAILED tests/test_base_url.py::test_the_calls_go_to_the_configured_root - Ass...
+RED   URL catalog follows the setting  restore-ok  FAILED tests/test_base_url.py::test_the_catalog_reads_the_configured_root - A...

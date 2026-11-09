@@ -4,7 +4,8 @@
 - GET /api/v1/endpoints/zdr: ZDR endpoints; `model_id` is undated, the dated slug is only in `name` (SPIKE §3.6).
 - GET /api/v1/models: LLMs, kept for prices and `supported_parameters` of the LLM baseline (§7.5).
 
-No key is sent: both lists are public. P1 uses prices and ZDR flags; the capability matrix (P3) builds on it.
+No key is sent: both lists are public. P1 uses prices and ZDR flags; the capability matrix (P3) builds on it. The root
+is OPENROUTER_BASE_URL (.env), https://openrouter.ai by default.
 """
 
 from __future__ import annotations
@@ -17,15 +18,17 @@ from typing import Any
 
 import httpx
 
-BASE = "https://openrouter.ai"
+from app.settings import OPENROUTER_BASE
+
 UA = {"User-Agent": "decision-models-playground/0.1"}
 STALE_S = 24 * 3600
 
 
 class Catalog:
-    def __init__(self, path: Path, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(self, path: Path, transport: httpx.AsyncBaseTransport | None = None, base: str = OPENROUTER_BASE):
         self.path = path
         self.transport = transport
+        self.base = base
         self.data: dict[str, Any] = {}
         self.error: str | None = None
         self._load()
@@ -46,11 +49,11 @@ class Catalog:
 
     async def refresh(self) -> dict[str, Any]:
         async with httpx.AsyncClient(headers=UA, timeout=20, transport=self.transport) as client:
-            dec = await client.get(f"{BASE}/api/v1/models", params={"output_modalities": "decisions"})
+            dec = await client.get(f"{self.base}/api/v1/models", params={"output_modalities": "decisions"})
             dec.raise_for_status()
-            zdr = await client.get(f"{BASE}/api/v1/endpoints/zdr")
+            zdr = await client.get(f"{self.base}/api/v1/endpoints/zdr")
             zdr.raise_for_status()
-            llm = await client.get(f"{BASE}/api/v1/models")
+            llm = await client.get(f"{self.base}/api/v1/models")
             llm.raise_for_status()
         decision_ids = {m["id"] for m in dec.json()["data"]}
         llm_ids = {m["id"] for m in llm.json()["data"]}

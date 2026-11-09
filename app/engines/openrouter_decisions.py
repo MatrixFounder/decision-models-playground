@@ -1,4 +1,4 @@
-"""OpenRouter Decisions (docs/DESIGN.md §7.2): POST https://openrouter.ai/api/alpha/decisions, System One body.
+"""OpenRouter Decisions (docs/DESIGN.md §7.2): POST <OPENROUTER_BASE_URL>/api/alpha/decisions, System One body.
 
 Facts from P0 (docs/SPIKE.md §3) this engine relies on:
 - an unknown question type fails the whole request with 400; `error.message` is a zod error serialized as a string,
@@ -31,7 +31,9 @@ from app.schemas import (
     Usage,
 )
 
-URL = "https://openrouter.ai/api/alpha/decisions"
+# the path is the API's version (alpha): when OpenRouter moves it, the reading of the answer moves with it — code, not
+# config. The root is OPENROUTER_BASE_URL in .env, or the engine's own `base_url` in config.yaml.
+DECISIONS_PATH = "/api/alpha/decisions"
 # P3 live (2026-11-09): an over-long prompt answers 422 "The prompt for question `q` is over the model's input limit of
 # 65536 tokens, images included, or 250000 bytes of text." — the request is too long; the question is not refused
 INPUT_LIMIT = re.compile(r"over the model's input limit")
@@ -118,7 +120,11 @@ def error_text(body: Any, status: int) -> str:
 
 class OpenRouterDecisions(BaseEngine):
     kind = "openrouter_decisions"
-    url = URL
+
+    @property
+    def url(self) -> str:
+        """The engine's own base_url (config.yaml) or OPENROUTER_BASE_URL (.env), plus the API's path."""
+        return f"{self.spec.base_url or self.ctx.settings.openrouter_base_url}{DECISIONS_PATH}"
 
     def available(self) -> tuple[bool, str]:
         if not self.spec.enabled:

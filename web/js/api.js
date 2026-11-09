@@ -118,3 +118,6 @@ export const runDataset = (name, body, onEvent) => streamPost(`/api/datasets/${e
 export const reportUrl = (id, format = 'json', lang = 'ru', target = 0.9) =>
   `/api/reports/${encodeURIComponent(id)}?${new URLSearchParams({ format, lang, target: String(target) })}`;
 export const getReport = (id, target = 0.9) => json(reportUrl(id, 'json', 'ru', target));
+export const estimateExperiment = (body) => post('/api/experiments/estimate', body);
+export const reportKind = (id) => json(`/api/reports/${encodeURIComponent(id)}?format=kind`);
+export const runExperiment = (body, onEvent) => streamPost('/api/experiments', body, onEvent);

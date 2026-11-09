@@ -255,6 +255,16 @@ svg.chart .dot { fill: var(--accent); fill-opacity: .7; }
 .lg-acc::before { background: var(--warn); }
 #tab-datasets h3 { font-size: 14px; margin: 16px 0 6px; }
 
+/* ── experiments ──────────────────────────────────────────────── */
+.ex-grid { display: grid; grid-template-columns: minmax(340px, 4fr) minmax(460px, 8fr); gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .ex-grid { grid-template-columns: 1fr; } }
+.ex-form { border: 1px solid var(--border); border-radius: 8px; padding: 6px; margin: 6px 0; display: flex; flex-direction: column; gap: 4px; }
+.ex-form input { width: 120px; }
+.clip-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
+table.heatmap td.heat { text-align: center; min-width: 44px; }
+table.heatmap th { white-space: nowrap; }
+#tab-experiments h3 { font-size: 14px; margin: 16px 0 6px; }
+
 /* ── history ──────────────────────────────────────────────────── */
 .filters { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
 table.history td button { padding: 2px 8px; }

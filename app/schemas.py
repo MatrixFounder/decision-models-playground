@@ -260,6 +260,15 @@ class EngineSpec(BaseModel):
     audio: bool = False
     mode: str | None = None
 
+    @model_validator(mode="after")
+    def _openrouter_base(self) -> EngineSpec:
+        # an OpenRouter engine sends the key to its base_url: the same rule as OPENROUTER_BASE_URL (review P5)
+        if self.kind in ("openrouter_decisions", "openrouter_llm") and self.base_url is not None:
+            from app.settings import check_base_url
+
+            self.base_url = check_base_url(self.base_url, f"engine {self.id}: base_url")
+        return self
+
 
 class BudgetConfig(BaseModel):
     # P1 measured Jev at 0.95-1.65 tokens per character and d1.1 at about 0.43: 1.5 x chars + 200 covers every P0 call.

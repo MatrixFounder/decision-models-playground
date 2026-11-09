@@ -145,9 +145,9 @@ def test_the_budget_running_out_mid_run_stops_the_rest(client, upstream, monkeyp
     """The estimate was too low: the reservation is topped up per call while the day allows, then the items left
     are `budget`, not asked; the run is saved and ends with budget_stop (DESIGN §19). After the first $0.40 call a
     call holds $0.40, not its $0.000001 estimate: the day stops inside the limit."""
-    import app.dataset_run as dr
+    import app.batch as batch
 
-    monkeypatch.setattr(dr, "lane_width", lambda e: 1)  # one call at a time: the order is fixed
+    monkeypatch.setattr(batch, "lane_width", lambda e: 1)  # one call at a time: the order is fixed
     upload(client)
     upstream.default = lambda body: httpx.Response(200, json={**json.loads(echo_answers(body).content),
                                                               "usage": {"input_tokens": 100, "cost": 0.4}})
@@ -340,19 +340,21 @@ def test_the_in_flight_estimate_is_given_back(client, upstream, monkeypatch):
 
 def test_an_estimate_that_fails_mid_run_is_one_items_failure(client, upstream, monkeypatch):
     """Review P4: an exception outside engine.run escaped its lane; the other lanes kept calling after run_error,
-    outside the reservation. Now it is that item's provider_error and the run ends normally."""
+    outside the reservation. Now it is that item's provider_error and the run ends normally. (Estimates are cached per
+    request since P5, so the failure is planted in Runner.call itself — the profile, the split — not in the engine.)"""
     upload(client)
     upstream.default = GOOD
-    real, seen = OpenRouterDecisions.estimate_cost, []
+    runner = client.app.state.runner
+    real, seen = runner.call, []
 
-    def flaky(self, req):
-        if self.spec.id == "or-jev-1.14":
+    async def flaky(engine, req, opts):
+        if engine.spec.id == "or-jev-1.14":
             seen.append(1)
-            if len(seen) == 6:  # 4 estimates before the run, then the 2nd item of the run
-                raise RuntimeError("price table broken")
-        return real(self, req)
+            if len(seen) == 2:
+                raise RuntimeError("profile file broken")
+        return await real(engine, req, opts)
 
-    monkeypatch.setattr(OpenRouterDecisions, "estimate_cost", flaky)
+    runner.call = flaky
     events = run(client, engines=["or-jev-1.14", "or-d1.1"])
     assert events[-1][0] == "run_done"
     record = client.get(f"/api/runs/{events[-1][1]['run_id']}").json()
