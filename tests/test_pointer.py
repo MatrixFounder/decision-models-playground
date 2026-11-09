@@ -419,7 +419,59 @@ def test_an_engine_that_breaks_waits_for_the_others_and_their_money_counts(clien
     # d1.1 finished, pass included, before the run ended: no call goes on after the terminal event
     assert names.index("engine_done") < names.index("run_error") and len(upstream.calls) == 3
     budget = client.get("/api/budget").json()
-    assert budget["reserved_usd"] == 0 and budget["spent_usd"] == pytest.approx(0.000005)
+    # every billed call counts: d1.1's main call and pass, and Jev's main call, made before its engine broke
+    assert budget["reserved_usd"] == 0 and budget["spent_usd"] == pytest.approx(0.000002 + 0.000005)
+
+
+def test_engines_that_all_break_after_billed_calls_still_count(client, upstream, monkeypatch):
+    async def point(self, *a, **kw):  # every engine breaks after its billed main call (the reviewer's probe)
+        raise RuntimeError("planted")
+
+    monkeypatch.setattr(Runner, "point", point)
+    upstream.push("typesafe/jev-1.14", noul(0.9, cost=0.001, model="typesafe/jev-1.14-20261014"))
+    upstream.push("liquid/d1.1", noul(0.9, cost=0.002))
+    events = post(client, run_body(engines=("or-jev-1.14", "or-d1.1")))
+    assert events[-1][0] == "run_error" and len(upstream.calls) == 2
+    budget = client.get("/api/budget").json()
+    assert budget["reserved_usd"] == 0 and budget["spent_usd"] == pytest.approx(0.003)
+
+
+def test_a_cancelled_run_counts_what_was_billed(client, upstream):
+    import asyncio
+
+    from app.runner import Runner as R
+
+    runner: R = client.app.state.runner
+    seen = []
+
+    async def emit(name, payload):
+        seen.append(name)
+
+    async def go():
+        upstream.push("liquid/d1.1", noul(0.9, cost=0.004))
+        orig = runner.point
+
+        async def slow_point(*a, **kw):  # the main call is billed, then the run is cancelled mid-pointer
+            await asyncio.sleep(10)
+            return await orig(*a, **kw)
+
+        runner.point = slow_point
+        try:
+            task = asyncio.create_task(runner.execute(RunIn.model_validate(run_body()), emit))
+            while len(upstream.calls) < 1:
+                await asyncio.sleep(0.01)
+            await asyncio.sleep(0.05)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        finally:
+            del runner.point
+
+    client.portal.call(go)
+    budget = client.get("/api/budget").json()
+    assert budget["reserved_usd"] == 0 and budget["spent_usd"] == pytest.approx(0.004)
 
 
 def test_the_passes_read_the_profile_the_estimate_read(client, upstream, monkeypatch):

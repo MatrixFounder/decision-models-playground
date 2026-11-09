@@ -49,3 +49,8 @@ RED   F24 one profile snapshot  restore-ok  FAILED tests/test_pointer.py::test_t
 RED   F25 a null is sized as sent  restore-ok  FAILED tests/test_pointer.py::test_a_null_option_is_sized_as_it_is_sent - Ass...
 RED   F26 a blank text with media is null  restore-ok  ✖ with media, a blank text is no state (0.637125ms); ✖ failing tests:
 RED   F6 the estimate says so  restore-ok  FAILED tests/test_pointer.py::test_past_b_squared_the_whole_request_is_too_long_and_makes_no_call
+# Re-check round (owner's request): the ledger fix for F5, plantings in a fresh copy (fingerprint 8165163721cabc4d before and after)
+RED   Recheck ledger records every call  restore-ok  FAILED tests/test_pointer.py::test_an_engine_that_breaks_waits_for_the_others_and_their_money_counts
+RED   Recheck an unsaved run charges the ledger  restore-ok  FAILED tests/test_pointer.py::test_an_engine_that_breaks_waits_for_the_others_and_their_money_counts
+RED   Recheck only finished engines would count  restore-ok  FAILED tests/test_pointer.py::test_an_engine_that_breaks_waits_for_the_others_and_their_money_counts
+RED   Recheck a cancelled run is charged  restore-ok  FAILED tests/test_pointer.py::test_a_cancelled_run_counts_what_was_billed - a...

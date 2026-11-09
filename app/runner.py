@@ -21,6 +21,7 @@ import logging
 import math
 import time
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from importlib import metadata
 from typing import Any
@@ -35,6 +36,9 @@ from app.store import Store, local_day, new_id
 
 log = logging.getLogger("playground.runner")
 Emit = Callable[[str, dict[str, Any]], Awaitable[None]]
+# every call a compare run makes, main and pointer passes, in the order they finish: what the providers billed,
+# whatever happens to the engine's result afterwards (review P6 re-check)
+_LEDGER: ContextVar[list[EngineResult] | None] = ContextVar("run_ledger", default=None)
 TERMINAL = ("run_done", "budget_stop", "run_error")
 
 
@@ -127,6 +131,13 @@ class Runner:
         return out
 
     async def call(self, engine: BaseEngine, req: DecisionRequest, opts: RunOptions) -> EngineResult:
+        res = await self._call(engine, req, opts)
+        ledger = _LEDGER.get()
+        if ledger is not None:
+            ledger.append(res)
+        return res
+
+    async def _call(self, engine: BaseEngine, req: DecisionRequest, opts: RunOptions) -> EngineResult:
         keys, refused = self.split(engine, req)
         all_keys = list(req.questions)
         off = sorted({m.type for m in req.media} - set(engine.profile().media))
@@ -220,6 +231,9 @@ class Runner:
 
     async def execute(self, run_in: RunIn, emit: Emit, kind: str = "compare") -> dict[str, Any] | None:
         reserved = 0.0
+        saved = False
+        ledger: list[EngineResult] = []
+        token = _LEDGER.set(ledger)  # the engines' tasks copy this context: they append to the same list
         try:
             engines = self.engines_for(run_in.engines)
             profiles = {e.spec.id: e.profile() for e in engines}  # one snapshot: the estimate and the passes agree
@@ -259,8 +273,7 @@ class Runner:
             # every engine finishes before the run ends: no call goes on after a terminal event (review P6)
             outcomes = await asyncio.gather(*(one(e) for e in engines), return_exceptions=True)
             broken = [o for o in outcomes if isinstance(o, BaseException)]
-            if broken:
-                self.budget.charge_unsaved(sum(o.usage.cost_usd or 0.0 for o in outcomes if isinstance(o, EngineResult)))
+            if broken:  # the ledger, charged below, holds the calls of the broken engines too
                 raise broken[0]
             results = list(outcomes)
             record = {
@@ -282,14 +295,10 @@ class Runner:
                 "versions": {"app": __version__, "mlx_vlm": mlx_vlm_version(),
                              "models": {r.engine_id: r.snapshot for r in results if r.snapshot}},
             }
-            try:
-                self.store.save(record)
-            except Exception:
-                self.budget.charge_unsaved(record["cost_usd"])  # the providers billed it either way
-                raise
-            finally:
-                self.budget.release(reserved)  # the saved record (or the unsaved charge) now carries the real cost
-                reserved = 0.0
+            self.store.save(record)
+            saved = True
+            self.budget.release(reserved)  # the saved record now carries the real cost
+            reserved = 0.0
             await emit("run_done", {"run_id": run_id, "cost_usd": record["cost_usd"], "day": record["day"],
                                     "budget": self.budget.status()})
             return record
@@ -298,6 +307,10 @@ class Runner:
             await emit("run_error", {"message": f"{type(e).__name__}: {e}"[:500]})
             return None
         finally:
+            _LEDGER.reset(token)
+            if not saved:  # an engine broke, the record could not be written, or the run was cancelled:
+                # what the providers billed still counts against the day (review P1, P6)
+                self.budget.charge_unsaved(sum(r.usage.cost_usd or 0.0 for r in ledger))
             if reserved:
                 self.budget.release(reserved)
 
