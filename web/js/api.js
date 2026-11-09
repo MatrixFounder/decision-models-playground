@@ -121,3 +121,7 @@ export const getReport = (id, target = 0.9) => json(reportUrl(id, 'json', 'ru', 
 export const estimateExperiment = (body) => post('/api/experiments/estimate', body);
 export const reportKind = (id) => json(`/api/reports/${encodeURIComponent(id)}?format=kind`);
 export const runExperiment = (body, onEvent) => streamPost('/api/experiments', body, onEvent);
+/** A picture or a recording; the file is the body (DESIGN §15). Answers {type, path, sha256, seconds, …}. */
+export const uploadMedia = (file) =>
+  json('/api/media', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
+export const mediaUrl = (path) => `/api/media/${encodeURIComponent(path)}`;

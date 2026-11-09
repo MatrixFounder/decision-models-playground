@@ -16,7 +16,7 @@ WHIP         ?= ../whip-insight
 TAG          ?= std_answering_machine
 
 .DEFAULT_GOAL := help
-.PHONY: help setup models run run-compat run-bg stop check test smoke-local import-tags synth clean-runs spike spike-openrouter spike-mlx spike-audio clean-venv
+.PHONY: help setup models run run-compat run-bg stop check test smoke-local import-tags synth clean-runs clean-media spike spike-openrouter spike-mlx spike-audio clean-venv
 
 help:
 	@echo "make setup            - create .venv, install requirements (+ requirements-mlx.txt on Apple Silicon)"
@@ -30,6 +30,7 @@ help:
 	@echo "make import-tags      - whip-insight's 56 standard tags → presets/std_tags/ and datasets/ (WHIP=$(WHIP))"
 	@echo "make synth            - a tag's phrases inside neutral dialogues → datasets/synth_<tag> (TAG=$(TAG))"
 	@echo "make clean-runs       - delete runs/ (asks first)"
+	@echo "make clean-media      - delete media/: uploaded recordings and pictures (asks first)"
 	@echo "make spike            - P0: OpenRouter + both local d1 models (docs/SPIKE.md)"
 	@echo "make spike-openrouter - P0: catalog, ZDR list, Decisions calls (needs OPENROUTER_API_KEY in .env)"
 	@echo "make spike-mlx        - P0: d1-2B and d1-Omni through mlx-vlm, one model per process"
@@ -81,6 +82,10 @@ synth: $(PY)
 
 clean-runs:
 	@printf "Delete runs/ with every saved run? [y/N] "; read a; [ "$$a" = "y" ] && rm -rf runs && echo "==> runs/ deleted" || echo "==> kept"
+
+# uploads are kept while a saved run may name them (a rerun reads the same file); they are never pruned on their own
+clean-media:
+	@printf "Delete media/ with every uploaded recording and picture (saved runs that name them cannot be rerun)? [y/N] "; read a; [ "$$a" = "y" ] && rm -rf media && echo "==> media/ deleted" || echo "==> kept"
 
 spike: spike-openrouter spike-mlx
 

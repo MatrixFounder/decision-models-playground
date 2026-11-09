@@ -9,3 +9,9 @@ export function backupOnOpen(currentJson, existingBackupJson) {
   try { current = JSON.parse(currentJson); } catch { return existingBackupJson ?? null; }
   return current && !current.fromRun ? currentJson : (existingBackupJson ?? null);
 }
+
+/** The state a request sends: with media attached, an empty or blank text is no state at all (`null`): a recording
+ * alone is the whole state (SPIKE §2.5), and d1-Omni must not get a stray text beside it (review P6). */
+export function bodyState(state, mediaCount) {
+  return mediaCount > 0 && typeof state === 'string' && state.trim() === '' ? null : state;
+}

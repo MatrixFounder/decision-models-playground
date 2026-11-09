@@ -1,0 +1,51 @@
+# P6 fix round: builder plantings in a copy of the tree (restore verified by sha256 after each; copy identical after all: 9c5febdd103fa77a)
+# One measurement redone: 'F6 the estimate says so' first removed an if-body (IndentationError, red for the wrong reason); replaced by 'pass', red on the test below.
+RED   F1 a number does not join a group  restore-ok  FAILED tests/test_normalize_ru.py::test_numbers_that_would_be_a_guess_stay_none[12-15]
+RED   F1 words do not join a digit group  restore-ok  FAILED tests/test_normalize_ru.py::test_numbers_that_would_be_a_guess_stay_none[5 \u0441\u0442\u043e]
+RED   F1 a group after a scale is below 1000  restore-ok  FAILED tests/test_normalize_ru.py::test_numbers_that_would_be_a_guess_stay_none[3 \u0442\u044b\u0441\u044f\u0447\u0438 1500]
+RED   F1 an abbreviation needs a number  restore-ok  FAILED tests/test_normalize_ru.py::test_numbers_that_would_be_a_guess_stay_none[\u0442\u044b\u0441]
+RED   F2 t0 is a turn  restore-ok  FAILED tests/test_pointer.py::test_whip_insights_own_windows_are_taken_as_they_are[BUNDLE2]
+RED   F2 options in turn order  restore-ok  FAILED tests/test_pointer.py::test_out_of_order_fragments_give_the_routes_order
+RED   F2 turns from t0  restore-ok  FAILED tests/test_pointer.py::test_turns_are_lines_numbered_from_zero_as_whip_insight_numbers_them
+RED   F3 run_started carries the request  restore-ok  FAILED tests/test_pointer.py::test_a_yes_cites_a_turn_and_the_pass_is_paid - ...
+RED   F3 the view takes it  restore-ok  ✖ a live pointer run shows the turns the engines read, not the typed text (0.167834ms); ✖ failing tests:
+RED   F4/P7 passes in the engine total  restore-ok  FAILED tests/test_pointer.py::test_the_estimate_is_the_main_call_plus_the_passes
+RED   F5 a pointer bug fails the pointer  restore-ok  FAILED tests/test_pointer.py::test_a_pointer_bug_after_a_billed_pass_keeps_the_answers_and_the_money
+RED   F5 every engine finishes first  restore-ok  FAILED tests/test_pointer.py::test_an_engine_that_breaks_waits_for_the_others_and_their_money_counts
+RED   F5 their money counts  restore-ok  FAILED tests/test_pointer.py::test_an_engine_that_breaks_waits_for_the_others_and_their_money_counts
+RED   F6 no main call past B²  restore-ok  FAILED tests/test_pointer.py::test_past_b_squared_the_whole_request_is_too_long_and_makes_no_call
+RED   F6 the boundary is B² itself  restore-ok  FAILED tests/test_pointer.py::test_exactly_b_squared_turns_take_two_passes - ...
+RED   F7 a rounded yes is marked  restore-ok  ✖ a pointer under a «false» cell is marked as asked for a rounded «да» (0.318584ms); ✖ failing tests:
+RED   F8 unknown tokens stay unknown  restore-ok  FAILED tests/test_pointer.py::test_folded_usage_is_never_more_certain_than_its_parts
+RED   F8 the weakest source  restore-ok  FAILED tests/test_pointer.py::test_folded_usage_is_never_more_certain_than_its_parts
+RED   F9 only sent calls are passes  restore-ok  FAILED tests/test_pointer.py::test_a_pass_refused_before_sending_is_not_counted
+RED   F9 a profile refusal is not sent  restore-ok  FAILED tests/test_pointer.py::test_a_call_refused_here_is_not_a_pass - assert...
+RED   F10/P2 block size  restore-ok  FAILED tests/test_pointer.py::test_b_blocks_and_passes_against_the_route - As...
+RED   F10/P4 point_one at B²  restore-ok  FAILED tests/test_pointer.py::test_exactly_b_squared_turns_take_two_passes - ...
+RED   F10 passes() at B²  restore-ok  FAILED tests/test_pointer.py::test_b_blocks_and_passes_against_the_route - as...
+RED   F11/P10 ffmpeg -f  restore-ok  FAILED tests/test_media.py::test_the_ffmpeg_argv - AssertionError: assert ['-...
+RED   F11/P11 ffmpeg protocol whitelist  restore-ok  FAILED tests/test_media.py::test_the_ffmpeg_argv - AssertionError: assert ['-...
+RED   F12/P12 the upload limit  restore-ok  FAILED tests/test_media.py::test_the_upload_limit_is_16_mib_and_reaches_exactly_it
+RED   F13/P16 only store names  restore-ok  FAILED tests/test_media.py::test_files_the_store_did_not_name_are_not_served
+RED   F14/P14 no empty clip  restore-ok  FAILED tests/test_media.py::test_a_recording_without_sound_is_refused - Faile...
+RED   F14/P15 the WAV format checked  restore-ok  FAILED tests/test_media.py::test_what_ffmpeg_writes_is_checked - Failed: DID ...
+RED   F15 a cut without a length  restore-ok  FAILED tests/test_media.py::test_the_cut_is_reported_even_when_the_recording_states_no_length
+RED   F16 an emptied threshold field  restore-ok  ✖ an emptied or invalid threshold field keeps the old threshold (0.643167ms); ✖ failing tests:
+RED   F17 a leading separator stays  restore-ok  FAILED tests/test_normalize_ru.py::test_numbers_that_would_be_a_guess_stay_none[.5]
+RED   F17 the weekday checked  restore-ok  FAILED tests/test_normalize_ru.py::test_dates_that_would_be_a_guess_stay_none[\u0432 \u0441\u0440\u0435\u0434\u0443, 12 \u043d\u043e\u044f\u0431\u0440\u044f 2026]
+RED   F17 ISO read  restore-ok  FAILED tests/test_normalize_ru.py::test_dates_read[2026-11-12-2026-11-12] - A...
+RED   F17 decimal arithmetic  restore-ok  FAILED tests/test_normalize_ru.py::test_numbers_read[1,005 \u0442\u044b\u0441.-1005]
+RED   F17 the unit's dot  restore-ok  FAILED tests/test_normalize_ru.py::test_numbers_read[350 000 \u0440-350000]
+RED   F18 a reading never sinks the answer  restore-ok  FAILED tests/test_normalize_ru.py::test_a_reading_that_fails_never_sinks_the_models_answer
+RED   F18 the length cap  restore-ok  FAILED tests/test_normalize_ru.py::test_numbers_that_would_be_a_guess_stay_none[text21]
+RED   F20 HEIC is not audio  restore-ok  FAILED tests/test_media.py::test_iphone_pictures_and_wideband_amr_are_told_apart
+RED   F20 AMR-WB  restore-ok  FAILED tests/test_media.py::test_iphone_pictures_and_wideband_amr_are_told_apart
+RED   F21 the question as written  restore-ok  FAILED tests/test_pointer.py::test_the_preferred_answer_and_the_instruction
+RED   F22 newlines only  restore-ok  FAILED tests/test_pointer.py::test_a_line_is_split_on_newlines_only_and_a_bare_speaker_names_the_next_line
+RED   F22 a bare speaker names the next line  restore-ok  FAILED tests/test_pointer.py::test_a_line_is_split_on_newlines_only_and_a_bare_speaker_names_the_next_line
+RED   F23 the sweep at start  restore-ok  FAILED tests/test_media.py::test_temp_files_of_a_crashed_upload_are_swept_at_start
+RED   F23 two conversions at once  restore-ok  FAILED tests/test_media.py::test_at_most_two_conversions_at_once - assert ([4...
+RED   F24 one profile snapshot  restore-ok  FAILED tests/test_pointer.py::test_the_passes_read_the_profile_the_estimate_read
+RED   F25 a null is sized as sent  restore-ok  FAILED tests/test_pointer.py::test_a_null_option_is_sized_as_it_is_sent - Ass...
+RED   F26 a blank text with media is null  restore-ok  ✖ with media, a blank text is no state (0.637125ms); ✖ failing tests:
+RED   F6 the estimate says so  restore-ok  FAILED tests/test_pointer.py::test_past_b_squared_the_whole_request_is_too_long_and_makes_no_call

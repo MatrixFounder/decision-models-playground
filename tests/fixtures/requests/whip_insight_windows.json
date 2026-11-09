@@ -1,0 +1,68 @@
+{
+ "_comment": "Pass-1 decision requests built by whip-insight's own detect() (skills/default/call-analysis/lib/detect.js, buildDecisionRequest) for two of its test bundles, 2026-11-09, review P6 F2: turns are numbered from t0, a turn with two hits gives two fragments, the pointer's options are the distinct turns in turn order.",
+ "BUNDLE2": {
+  "state": {
+   "fragments": [
+    {
+     "turn": "t0",
+     "participant": "participant01",
+     "text": "Здравствуйте, это дорого для нас."
+    },
+    {
+     "turn": "t2",
+     "participant": "participant02",
+     "text": "Да, это дорого, честно говоря."
+    }
+   ]
+  },
+  "question": {
+   "type": "boolean",
+   "instructions": "Выразил ли клиент возражение по цене?"
+  },
+  "pointer": {
+   "question": "q1",
+   "options": [
+    "t0",
+    "t2"
+   ],
+   "instructions": {
+    "true": "В какой реплике видно, что Выразил ли клиент возражение по цене?"
+   }
+  }
+ },
+ "BUNDLE3C": {
+  "state": {
+   "fragments": [
+    {
+     "turn": "t0",
+     "participant": "participant01",
+     "text": "Это дорого, очень дорого."
+    },
+    {
+     "turn": "t0",
+     "participant": "participant01",
+     "text": "Это дорого, очень дорого."
+    },
+    {
+     "turn": "t2",
+     "participant": "participant01",
+     "text": "Да, дорого."
+    }
+   ]
+  },
+  "question": {
+   "type": "boolean",
+   "instructions": "Выразил ли клиент возражение по цене?"
+  },
+  "pointer": {
+   "question": "q1",
+   "options": [
+    "t0",
+    "t2"
+   ],
+   "instructions": {
+    "true": "В какой реплике видно, что Выразил ли клиент возражение по цене?"
+   }
+  }
+ }
+}

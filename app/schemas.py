@@ -111,7 +111,8 @@ class Question(BaseModel):
         n = len(self.instructions) if isinstance(self.instructions, str) else len(str(self.instructions))
         c = self.criteria
         if isinstance(c, dict):
-            n += sum(len(k) + len(v or "") for k, v in c.items())
+            # a null description is sent as `null`: a pointer pass over 240 turns is mostly that (review P6)
+            n += sum(len(k) + (len(v) if v is not None else 4) for k, v in c.items())
         elif isinstance(c, list):
             n += sum(len(x) for x in c)
         return n
@@ -166,12 +167,15 @@ class DecisionRequest(BaseModel):
 
 
 class ExtractResult(BaseModel):
-    value: Any = None
+    value: Any = None  # the model's own value (mlx-vlm's parser)
     text: str | None = None
-    span: tuple[int, int] | None = None
+    span: tuple[int, int] | None = None  # character offsets into the state: state[a:b] == text
     found: float | None = None
     interval: tuple[float, float] | None = None
     unit: str | None = None
+    # the playground's reading of `text` when the model gave no value (date, number; app/normalize_ru.py, DESIGN §14):
+    # never the model's own, and the UI says so
+    normalized: Any = None
 
 
 class Answer(BaseModel):
@@ -191,6 +195,19 @@ class Usage(BaseModel):
     cost_source: Literal["provider", "price", "none"] = "none"
 
 
+class PointerResult(BaseModel):
+    """The turn pointer of one answered question (DESIGN §14, UC-8; app/pointer.py)."""
+
+    turn: str | None = None  # the cited turn, `t<n>`
+    probability: float | None = None  # a two-pass turn: the product of both passes; one turn, not asked: None
+    instruction: str | None = None
+    passes: int = 0  # the calls made
+    failure: str | None = None  # unsupported | too_long | a request or question failure class of a pass
+    detail: str | None = None
+    latency_ms: int = 0
+    cost_usd: float | None = None
+
+
 class EngineResult(BaseModel):
     engine_id: str
     status: Literal["ok", "partial", "failed"]
@@ -204,6 +221,8 @@ class EngineResult(BaseModel):
     usage: Usage = Field(default_factory=Usage)
     raw: dict | None = None
     timings: dict[str, int] | None = None  # local engines: queue_ms, load_ms, call_ms (latency_ms is the call)
+    # a pointer run: per question that asked one. `usage` then covers the passes too (the money of the whole engine)
+    pointers: dict[str, PointerResult] = Field(default_factory=dict)
 
     @classmethod
     def build(cls, engine_id: str, keys: list[str], answers: dict[str, Answer], failures: dict[str, str], **kw) -> EngineResult:
@@ -293,6 +312,14 @@ class CompatConfig(BaseModel):
     allowed_hosts: list[str] = Field(default_factory=lambda: ["127.0.0.1", "localhost", "*.local"])
 
 
+class AudioConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # the d1-Omni card: long spoken passages lose accuracy (DESIGN §14); the clip length is an experiment axis
+    max_seconds: float = Field(30, gt=0, le=600)
+    sample_rate: Literal[16000] = 16000  # what d1-Omni's audio tower reads (SPIKE §2.5)
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -300,6 +327,7 @@ class AppConfig(BaseModel):
     budget: BudgetConfig = Field(default_factory=BudgetConfig)
     local: LocalConfig = Field(default_factory=LocalConfig)
     compat: CompatConfig = Field(default_factory=CompatConfig)
+    audio: AudioConfig = Field(default_factory=AudioConfig)
 
 
 class RunOptions(BaseModel):
@@ -316,3 +344,4 @@ class RunIn(BaseModel):
     tags: list[str] = Field(default_factory=list)
     title: str | None = None
     options: RunOptions = Field(default_factory=RunOptions)
+    pointer: bool = False  # the turn pointer (DESIGN §14, UC-8): the state is a transcript or {"fragments": [...]}

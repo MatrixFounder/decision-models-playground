@@ -7,7 +7,7 @@ import { History, isWorkbenchRun, notWorkbenchMessage } from './history.js';
 import { applyStatic, getLang, setLang, t } from './i18n.js';
 import { LocalModelsView } from './local.js';
 import { MatrixView } from './matrix.js';
-import { backupOnOpen } from './draft.js';
+import { backupOnOpen, bodyState } from './draft.js';
 import { makeHandler } from './runview.js';
 import { el, fromRequest, QuestionEditor, toRequest } from './questions.js';
 import { fmtUsd, renderResults } from './results.js';
@@ -19,6 +19,8 @@ const DEFAULT_PRESET = 'demo_bank_call';
 const ui = {
   engines: [],
   selected: new Set(),
+  media: [],  // uploads in this request: {type, path, sha256} plus what the chip shows (seconds, size, name)
+  pointer: false,
   stateMode: 'text',
   qJson: false,
   view: null,
@@ -33,7 +35,7 @@ const matrixView = new MatrixView($('#matrix'), { onBudget: () => loadBudget() }
 const datasetsView = new DatasetsView($('#datasets'), { getEngines: () => ui.engines, onBudget: () => loadBudget() });
 const experimentsView = new ExperimentsView($('#experiments'), {
   getEngines: () => ui.engines, getSelected: () => [...ui.selected], onBudget: () => loadBudget(),
-  getRequest: () => ({ state: currentState(), questions: currentQuestions() }),
+  getRequest: () => requestOf(),
 });
 
 // --- storage (a per-viewer convenience: the page works without it) -------------------------------------------------
@@ -44,6 +46,7 @@ function saveDraft() {
   try {
     localStorage.setItem(DRAFT_KEY, JSON.stringify({
       state: $('#state').value, stateMode: ui.stateMode, questions: editor.list, qJson: ui.qJson,
+      media: ui.media, pointer: ui.pointer,
       qJsonText: $('#questions-json').value, selected: [...ui.selected], title: $('#title').value, tags: $('#tags').value,
       fromRun: ui.draftFromRun || null,
     }));
@@ -62,6 +65,8 @@ function applyDraft(draft) {
     if (draft.qJsonText) $('#questions-json').value = draft.qJsonText;
   }
   ui.draftFromRun = draft.fromRun || null;
+  setMedia(draft.media || []);
+  setPointer(!!draft.pointer);
   onDraftChange();
 }
 
@@ -75,14 +80,60 @@ function currentState() {
   if (ui.stateMode !== 'json') return text;
   try { return JSON.parse(text); } catch (e) { throw new Error(t('json_invalid', { msg: e.message })); }
 }
+/** The request: the state, the questions and the uploads. A recording alone is the whole state (SPIKE §2.5). */
+function requestOf() {
+  const media = ui.media.map((m) => ({ type: m.type, path: m.path, sha256: m.sha256 }));
+  const state = bodyState(currentState(), media.length);
+  return media.length ? { state, questions: currentQuestions(), media } : { state, questions: currentQuestions() };
+}
 function runBody() {
   return {
-    request: { state: currentState(), questions: currentQuestions() },
+    request: requestOf(),
     engines: [...ui.selected],
     tags: $('#tags').value.split(',').map((s) => s.trim()).filter(Boolean),
     title: $('#title').value.trim() || null,
     options: { allow_no_zdr: $('#allow-no-zdr').checked },
+    pointer: ui.pointer,
   };
+}
+
+// --- media and the pointer (DESIGN §14) ----------------------------------------------------------------------------
+function mediaChip(m, i) {
+  let what;
+  if (m.type === 'audio') {
+    if (m.cut && m.source_seconds != null) what = t('media_cut', { s: m.seconds, src: m.source_seconds });
+    else if (m.cut) what = t('media_cut_unknown', { s: m.seconds });  // a live WebM states no length (review P6)
+    else what = t('media_audio', { s: m.seconds ?? '?' });
+  } else what = m.width ? t('media_image', { w: m.width, h: m.height }) : m.type;
+  const chip = el('span', { class: 'chip media-chip', title: `${m.name || ''} ${m.path}`.trim() }, el('b', {}, m.name || m.path), ` · ${what}`);
+  if (m.type === 'audio') chip.append(el('audio', { controls: true, preload: 'none', src: api.mediaUrl(m.path) }));
+  chip.append(el('button', { class: 'ghost small', title: t('media_remove'), onclick: () => { ui.media.splice(i, 1); renderMedia(); userEdited(); } }, '×'));
+  return chip;
+}
+function renderMedia() {
+  $('#media').replaceChildren(...ui.media.map(mediaChip));
+}
+function setMedia(list) {
+  ui.media = (list || []).filter((m) => m && m.type && m.path).map((m) => ({ ...m }));
+  renderMedia();
+}
+function setPointer(on) {
+  ui.pointer = !!on;
+  $('#pointer').checked = ui.pointer;
+}
+async function uploadMedia(file) {
+  const status = el('span', { class: 'chip' }, t('media_uploading', { name: file.name }));
+  $('#media').append(status);
+  try {
+    const saved = await api.uploadMedia(file);
+    ui.media.push({ ...saved, name: file.name });
+    $('#run-error').textContent = '';
+  } catch (e) {
+    $('#run-error').textContent = `${file.name}: ${e.message}`;
+  } finally {
+    renderMedia();
+    userEdited();
+  }
 }
 
 // --- estimate ------------------------------------------------------------------------------------------------------
@@ -240,7 +291,8 @@ async function rerunRun(id) {
   try {
     record = await api.getRun(id);
     if (!isWorkbenchRun(record)) throw new Error(notWorkbenchMessage(record.kind));
-    est = await api.estimate({ request: record.request, engines: record.engines.map((e) => e.engine_id) });
+    est = await api.estimate({ request: record.request, engines: record.engines.map((e) => e.engine_id),
+      pointer: !!record.pointer });
   } catch (e) {
     $('#run-error').textContent = e.message;
     return;
@@ -280,6 +332,8 @@ function openRun(record) {
   stashDraft();
   setState(record.request.state);
   setQuestions(record.request.questions);
+  setMedia(record.request.media);
+  setPointer(record.pointer);
   $('#title').value = record.title || '';
   $('#tags').value = (record.tags || []).join(', ');
   ui.view = {
@@ -420,6 +474,12 @@ async function start() {
   $('#title').addEventListener('input', userEdited);
   $('#tags').addEventListener('input', userEdited);
   $('#allow-no-zdr').addEventListener('change', onDraftChange);
+  $('#pointer').addEventListener('change', (e) => { setPointer(e.target.checked); userEdited(); });
+  $('#media-file').addEventListener('change', async (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    for (const f of files) await uploadMedia(f);  // eslint-disable-line no-await-in-loop
+  });
   $('#questions-json').addEventListener('input', userEdited);
   $('#q-add').addEventListener('click', () => editor.add());
   $('#q-json').addEventListener('click', () => setQJson(!ui.qJson));

@@ -29,6 +29,8 @@ from app.engines.base import BaseEngine
 from app.engines.mlx_local import MlxLocal
 from app.experiments import EXPERIMENT_TERMINAL, ExperimentError, ExperimentIn, ExperimentRunner, check_size
 from app.local_models import LocalModels, make_local
+from app.media import MAX_UPLOAD, MediaError, MediaStore, NoFfmpeg
+from app.pointer import PointerError
 from app.presets import PresetError, PresetNotFound, list_presets, load_preset
 from app.probe import PROBE_TERMINAL, PROBED_KINDS, ProbeIn, Prober, matrix_rows, valid_engine_id
 from app.registry import Registry, load_config
@@ -43,6 +45,7 @@ from app.store import Store
 WEB = ROOT / "web"
 log = logging.getLogger("playground.main")
 UNLOAD_WAIT_S = 5
+MEDIA_SLOTS = 2  # uploads converted at once (ffmpeg up to 60 s each, in the executor the MLX prechecks share)
 MAX_UI_BODY = 16 * 1024 * 1024  # a run's request; a transcript is well under 1 MB (review round 3, noted)
 # DESIGN §18: the browser never frames this page and loads nothing from elsewhere (clickjacking, review P1)
 SECURITY_HEADERS = {
@@ -84,7 +87,10 @@ def build_state(settings: Settings, transport=None, local: LocalModels | None = 
     datasets = DatasetStore(settings.data_dir / "datasets")
     dataset_runner = DatasetRunner(runner, datasets, store, budget, settings.data_dir / "reports")
     experiment_runner = ExperimentRunner(runner, store, budget)
-    return {"settings": settings, "catalog": catalog, "registry": registry, "store": store, "budget": budget,
+    media = MediaStore(settings.data_dir / "media", settings.ffmpeg_bin, config.audio.max_seconds,
+                       config.audio.sample_rate, config.compat.max_image_pixels)
+    media.sweep()  # temp files of uploads a crash cut short
+    return {"media": media, "media_slots": asyncio.Semaphore(MEDIA_SLOTS), "settings": settings, "catalog": catalog, "registry": registry, "store": store, "budget": budget,
             "runner": runner, "prober": prober, "datasets": datasets, "dataset_runner": dataset_runner,
             "experiment_runner": experiment_runner,
             "tasks": set(), "local": local,
@@ -185,7 +191,8 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
         state = st(request)
         try:
             state.runner.engines_for(run_in.engines)
-        except RunRejected as e:
+            state.runner.prepared(run_in)
+        except (RunRejected, PointerError) as e:
             raise HTTPException(400, str(e)) from None
         return stream_events(request, lambda emit: state.runner.execute(run_in, emit), TERMINAL, "run_error")
 
@@ -269,7 +276,7 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
     async def estimate(request: Request, run_in: RunIn) -> dict[str, Any]:
         try:
             return st(request).runner.estimate(run_in)
-        except RunRejected as e:
+        except (RunRejected, PointerError) as e:
             raise HTTPException(400, str(e)) from None
 
     @app.post("/api/runs")
@@ -299,10 +306,36 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
             raise HTTPException(400, f"a {record['kind']} record is not a Workbench run: it cannot be repeated here")
         try:
             run_in = RunIn(request=record["request"], engines=[e["engine_id"] for e in record["engines"]],
-                           tags=record.get("tags", []), title=record.get("title"), options=options or RunOptions())
+                           tags=record.get("tags", []), title=record.get("title"), options=options or RunOptions(),
+                           pointer=bool(record.get("pointer")))
         except ValidationError as e:
             raise HTTPException(400, f"the run cannot be repeated: {e.errors()[0]['msg']}") from None
         return stream(request, run_in)
+
+    # --- media (DESIGN §14 UC-6) --------------------------------------------------------------------------------------
+    @app.post("/api/media")
+    async def upload_media(request: Request) -> dict[str, Any]:
+        """The file is the body (no multipart); a picture is checked and kept, a recording converted (§14)."""
+        body = bytearray()  # one copy of the file in memory, not chunks plus their join (review P6)
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > MAX_UPLOAD:  # a body without Content-Length is counted here
+                raise HTTPException(413, f"the file is over {MAX_UPLOAD // (1024 * 1024)} MB")
+            body.extend(chunk)
+        try:
+            async with st(request).media_slots:  # two conversions at a time: the default executor is shared
+                saved = await asyncio.to_thread(st(request).media.save, body)
+        except MediaError as e:
+            raise HTTPException(400, str(e)) from None
+        except NoFfmpeg as e:
+            raise HTTPException(503, str(e)) from None
+        return saved.as_dict()
+
+    @app.get("/api/media/{name}")
+    async def get_media(request: Request, name: str) -> FileResponse:
+        path = st(request).media.path_of(name)
+        if path is None:
+            raise HTTPException(404, "no such upload")
+        return FileResponse(path)
 
     # --- local models (DESIGN §8, §16) --------------------------------------------------------------------------------
     @app.get("/api/local/models")

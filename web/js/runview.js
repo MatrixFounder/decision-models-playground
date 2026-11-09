@@ -15,7 +15,10 @@ export function makeHandler(view, { getCurrent, render, setMeta, finish }) {
   return (name, p) => {
     if (name === 'run_started') {
       view.runId = p.run_id;
+      // a pointer run: the request the engines read (the transcript as turns), so the cited turn shows live (P6)
+      if (p.request) view.request = p.request;
       if (mine()) setMeta('started', p);
+      if (p.request && mine()) render(view);
     } else if (name === 'engine_done' || name === 'engine_failed') {
       view.results[p.engine_id] = p.result;
       if (mine()) render(view);

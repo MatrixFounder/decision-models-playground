@@ -10,6 +10,7 @@ from typing import Any, ClassVar
 
 import httpx
 
+from app import normalize_ru
 from app.schemas import (
     MAX_CHOICE_OPTIONS,
     MAX_SCORE_LEVELS,
@@ -161,7 +162,9 @@ def _normalize(q: Question, raw: Any, names: dict[str, str]) -> Answer | str:
         return "invalid_answer"
     if span == "bad" or text is not None and not isinstance(text, str) or unit is not None and not isinstance(unit, str):
         return "invalid_answer"
-    extract = ExtractResult(value=value, text=text, span=span, found=found, interval=interval, unit=unit)
+    normalized = normalize_ru.normalize(q.type, text) if value is None else None
+    extract = ExtractResult(value=value, text=text, span=span, found=found, interval=interval, unit=unit,
+                            normalized=normalized)
     probs = {"found": found} if found is not None else {}
     return Answer(type=q.type, probabilities=probs, top_p=found, extract=extract)
 

@@ -275,3 +275,15 @@ table.history td button { padding: 2px 8px; }
   .topbar { flex-wrap: wrap; }
   .q-opt { width: 90px; }
 }
+
+/* P6 modes (DESIGN §14): media chips, extraction spans, the cited turn, multi thresholds */
+.media-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.media-row:empty { display: none; }
+.media-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 9px; font-size: 12px; }
+.media-chip audio { height: 26px; max-width: 220px; }
+.media-chip button { padding: 0 6px; }
+.snippet { color: var(--text-dim); white-space: pre-wrap; overflow-wrap: anywhere; }
+mark { background: var(--warn-soft); color: var(--text); border-radius: 3px; padding: 0 2px; }
+.pointer { margin-top: 4px; overflow-wrap: anywhere; }
+.threshold { display: block; margin-top: 4px; }
+.threshold input { width: 58px; }

@@ -38,9 +38,12 @@
             <select id="preset"></select>
             <label class="button ghost"><span data-i18n="load_file"></span>
               <input id="state-file" type="file" accept=".txt,.md,.json,text/plain,application/json" hidden></label>
+            <label class="button ghost" data-i18n-title="media_hint"><span data-i18n="media_add"></span>
+              <input id="media-file" type="file" accept="audio/*,.m4a,.amr,.opus,image/png,image/jpeg,image/webp" hidden></label>
           </div>
           <textarea id="state" rows="12" spellcheck="false"></textarea>
           <div id="state-info" class="dim small"></div>
+          <div id="media" class="media-row"></div>
         </div>
 
         <div class="panel">
@@ -67,6 +70,7 @@
             <input id="title" data-i18n-ph="title_ph">
             <input id="tags" data-i18n-ph="tags_ph">
           </div>
+          <label class="small" data-i18n-title="pointer_hint"><input id="pointer" type="checkbox"> <span data-i18n="pointer"></span></label>
           <label id="allow-no-zdr-row" class="small" hidden><input id="allow-no-zdr" type="checkbox"> <span data-i18n="allow_no_zdr"></span></label>
           <div class="run-row">
             <span id="estimate" class="mono small"></span>
