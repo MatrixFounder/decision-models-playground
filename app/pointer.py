@@ -1,4 +1,4 @@
-"""The turn pointer (DESIGN §14, UC-8): which turn of a transcript shows the answer.
+"""The turn pointer (TASK UC-8, ARCHITECTURE §3.10): which turn of a transcript shows the answer.
 
 The rules are whip-insight's (SPEC-decision-service §8.2.4 and the route's `decision-run.js`), so a measurement here
 holds there:

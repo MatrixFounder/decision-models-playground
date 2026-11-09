@@ -1,10 +1,10 @@
-"""One comparative run over several engines (docs/DESIGN.md §10, figure 3).
+"""One comparative run over several engines (docs/ARCHITECTURE.md §3.7, figure 3).
 
 1. Budget: the estimate of every paid engine; over what is left → `budget_stop`, no call.
 2. Profile: questions an engine's profile refuses get `unsupported` and are not sent; media outside the profile
    refuses the request.
 3. Engines run in parallel (each engine bounds itself by `concurrency`).
-   A pointer run (`pointer: true`, DESIGN §14, UC-8) sends the transcript as turns and, after an engine's answer,
+   A pointer run (`pointer: true`, TASK UC-8) sends the transcript as turns and, after an engine's answer,
    asks its turn pointers one question at a time (app/pointer.py); the estimate and the reserve cover the passes.
 4. `engine_done` / `engine_failed` per engine as soon as it finishes, its pointers included.
 5. The record goes to runs/<day>/<id>.json and one line to runs/index.jsonl; then `run_done`.

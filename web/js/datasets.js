@@ -1,4 +1,4 @@
-// Datasets (DESIGN §12, §16): the list, import of a JSONL/CSV file, a run over engines with its estimate, and the
+// Datasets (TASK UC-3): the list, import of a JSONL/CSV file, a run over engines with its estimate, and the
 // calibration report — threshold curve, reliability diagram, disagreements. The report itself holds no call text;
 // this screen shows the texts of the disagreeing items from the dataset, which stays on this Mac.
 
@@ -124,7 +124,7 @@ export class DatasetsView {
     return { engines: [...this.picked], limit: limit > 0 ? limit : null, options: { allow_no_zdr: allowNoZdr } };
   }
 
-  /** The no-ZDR consent belongs to one run (DESIGN §18): read and cleared at the start, as the Workbench does. */
+  /** The no-ZDR consent belongs to one run (TASK §6.1): read and cleared at the start, as the Workbench does. */
   takeConsent() {
     const allow = this.allowNoZdr;
     this.allowNoZdr = false;
@@ -428,7 +428,7 @@ export class DatasetsView {
     return el('div', { class: 'table-wrap' }, el('table', { class: 'small' }, el('thead', {}, head), el('tbody', {}, rows)));
   }
 
-  /** Choice and score: label rows, answer columns (DESIGN §16). */
+  /** Choice and score: label rows, answer columns (TASK UC-3). */
   confusion(g) {
     const rows = confusionRows(g.metrics);
     if (!rows.length) return '';

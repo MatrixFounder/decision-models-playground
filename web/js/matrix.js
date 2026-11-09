@@ -1,4 +1,4 @@
-// The capability matrix (DESIGN §13.2): configured engines with their latest probe, then OpenRouter's catalog.
+// The capability matrix (TASK UC-4): configured engines with their latest probe, then OpenRouter's catalog.
 // A cell is yes / no / unchecked (a probe has not observed it) / never (the engine kind cannot serve it).
 
 import * as api from './api.js';
@@ -16,7 +16,7 @@ export function cellView(value) {
 }
 
 /** A limit cell: '—' when its type is not served at all, '?' unknown, '≥240' when the largest size the probe tried
- * was served (the engine keeps its own ceiling, DESIGN §13.1). Pure. */
+ * was served (the engine keeps its own ceiling, TASK UC-4 rule 2). Pure. */
 export function limitView(value, cell, atTop) {
   if (cell === 'never' || cell === 'no') return '—';
   if (value == null) return '?';

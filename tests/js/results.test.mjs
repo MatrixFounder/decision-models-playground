@@ -1,4 +1,4 @@
-// node --test tests/js: the P6 readings of the results table (DESIGN §14) — spans, multi thresholds, cited turns,
+// node --test tests/js: the P6 readings of the results table (TASK UC-6…UC-8) — spans, multi thresholds, cited turns,
 // the playground's own normalization.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';

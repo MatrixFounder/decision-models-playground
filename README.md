@@ -1,108 +1,204 @@
 # Decision Models Playground
 
-Локальный стенд для decision-моделей: один звонок и одни вопросы прогоняются через несколько моделей сразу, ответы
-(вероятности, задержка, цена, снимок модели) ложатся рядом. Плюс локальный сервер `POST /v1/systemone`, через который
-стенд whip-insight подключает d1-модели, работающие на Mac.
+**English** | [Русский](README.ru.md)
 
-> **Статус (2026-11-09):** P0 (спайк, [docs/SPIKE.md](docs/SPIKE.md)), P1–P6 выполнены: Workbench, история и бюджет с
-> облачными моделями OpenRouter и локальными d1 (MLX), compat-сервер `/v1/systemone` для whip-insight, проба
-> возможностей и матрица «модель × возможность», размеченные наборы (теги whip-insight, синтетика, свои файлы) с
-> отчётом калибровки и порогом для тега whip-insight, эксперименты на устойчивость (формулировки, порядок вариантов,
-> повторы), режимы: указатель по репликам, извлечение с RU-нормализацией, multi с порогом, аудио для d1-Omni.
-> Дальше — `systemone_http` (Ollama, llama.cpp) и LLM-базовая линия (P7). План — [docs/DESIGN.md](docs/DESIGN.md) §22.
+A local test bench for decision models. One call and one set of questions run through several models at
+once; their answers (probabilities, latency, cost, model snapshot) appear side by side. The playground
+also runs a local `POST /v1/systemone` server, through which the whip-insight stand connects d1 models
+running on the Mac.
 
-## Что это и зачем
+> **Status (2026-11-09).** Increments P0–P6 are done ([TASK 001](docs/TASK.md)):
+>
+> - Workbench, history and daily budget with OpenRouter cloud models and local d1 (MLX);
+> - compat server `/v1/systemone` for whip-insight;
+> - capability probe and the "model × capability" matrix;
+> - labelled datasets (whip-insight tags, synthetic dialogues, own files) with a calibration report and
+>   a threshold for a whip-insight tag;
+> - stability experiments (wording, option order, repeats);
+> - research modes: turn pointer, extraction with Russian normalization, `multi` with a threshold, audio
+>   for d1-Omni.
+>
+> Next: the `systemone_http` engine (Ollama, llama.cpp) and the LLM baseline — work-item
+> [WI-1](docs/backlog/wi-1-p7-systemone-http-and-llm-baseline.md) in the [backlog](docs/BACKLOG.md).
 
-Decision-модель (Jev от TypeSafe, d1 от Liquid AI, Microsoft-Decision-1 и другие) отвечает на закрытые вопросы
-вероятностями и не генерирует текст. Чтобы решить, какой модели доверить смысловые теги, тип разговора или проверку
-звонка в whip-insight, их нужно сравнивать на своих звонках, на русском, с измеренными порогами.
+## Contents
 
-Четыре задачи первой версии:
+1. [What it is for](#what-it-is-for)
+2. [Engines](#engines)
+3. [Requirements](#requirements)
+4. [Quick start](#quick-start)
+5. [Using it](#using-it)
+6. [Make targets](#make-targets)
+7. [Configuration](#configuration)
+8. [Data, privacy and licenses](#data-privacy-and-licenses)
+9. [Relation to whip-insight](#relation-to-whip-insight)
+10. [Documentation](#documentation)
+11. [Project layout](#project-layout)
 
-1. **Сравнение и калибровка.** Вероятности разных моделей бок о бок; формулировки RU/EN, порядок вариантов, повторы;
-   кривая «порог → покрытие и точность» на размеченном наборе.
-2. **Локальный рантайм для whip-insight.** d1-2B и d1-Omni-2B на Apple Silicon через `mlx-vlm` отдаются наружу как
-   `POST /v1/systemone` (порт 8791, bearer-токен). LM Studio эту роль не тянет: он не загружает `lfm3_omni` и
-   запускает модели через генерацию текста.
-3. **Новые возможности d1.** Аудио на входе (тип звонка по записи), извлечение дат, сумм и номеров со `span`, выбор
-   нескольких вариантов.
-4. **Decision против LLM.** Тот же вопрос через обычную LLM на OpenRouter: согласие, цена, задержка.
+## What it is for
 
-## Движки
+A decision model (Jev by TypeSafe, d1 by Liquid AI, Microsoft-Decision-1 and others) answers closed
+questions with probabilities and generates no text. To decide which model whip-insight can trust with
+semantic tags, call type or call checks, the models have to be compared on real calls, in Russian, with
+measured thresholds.
 
-| Движок | Модели | Где работает |
-|---|---|---|
-| `openrouter_decisions` | `typesafe/jev-1.14`, `liquid/d1.1`, `~liquid/d1-latest` и другие из каталога | OpenRouter, ZDR по умолчанию |
-| `mlx_local` | `LiquidAI/d1-2B-MLX-8bit`, `LiquidAI/d1-Omni-2B-MLX-8bit` | Mac, `mlx-vlm >= 0.7.11`, одна модель в памяти |
-| `systemone_http` | Ollama `d1`, `d1:2b`; `llama-server` с d1-3B-GGUF | локальные серверы с `/v1/systemone` |
-| `openrouter_llm` | список LLM в `config.yaml` | OpenRouter chat completions; `logprobs` или словесная уверенность |
+Four goals of the first version:
 
-## Как будет устроено
+1. **Comparison and calibration.** Probabilities of different models side by side; RU/EN wording,
+   option order, repeats; the "threshold → coverage and accuracy" curve on a labelled dataset.
+2. **Local runtime for whip-insight.** d1-2B and d1-Omni-2B on Apple Silicon through `mlx-vlm`, served
+   as `POST /v1/systemone` (port 8791, bearer token). LM Studio cannot do this: it does not load
+   `lfm3_omni` and runs models through text generation.
+3. **New d1 capabilities.** Audio input (call type from a recording), extraction of dates, amounts and
+   numbers with a `span`, multi-select.
+4. **Decision model vs LLM.** The same question through an ordinary LLM on OpenRouter: agreement, cost,
+   latency (WI-1).
 
-- Стек как у `unlimited-ocr-demo`: FastAPI, pydantic, vanilla JS с SSE, реестр движков в `config.yaml`, история в
-  `runs/`, Makefile.
-- UI и `/api` — только `127.0.0.1:8790`. Compat-сервер — `:8791`, на LAN только с `SYSTEMONE_TOKEN`.
-- Наборы данных: свои файлы, синтетика, тестовые фразы 56 стандартных тегов whip-insight.
-- Бюджет: дневной лимит платных вызовов (`DAILY_BUDGET_USD`, по умолчанию 1 USD), оценка перед каждым прогоном.
+## Engines
 
-## Быстрый старт
+| Engine kind | Models | Where it runs | Status |
+|---|---|---|---|
+| `openrouter_decisions` | `typesafe/jev-1.14`, `liquid/d1.1`, `~liquid/d1-latest`, others from the catalog | OpenRouter Decisions API, ZDR by default | done |
+| `mlx_local` | `LiquidAI/d1-2B-MLX-8bit`, `LiquidAI/d1-Omni-2B-MLX-8bit` | in process on the Mac, `mlx-vlm >= 0.7.11`, one model in memory | done |
+| `systemone_http` | Ollama `d1`, `d1:2b`; `llama-server` with d1-3B-GGUF; the own compat server | local servers with `/v1/systemone` | planned (WI-1) |
+| `openrouter_llm` | LLM list in `config.yaml` | OpenRouter chat completions; `logprobs` or verbal confidence | planned (WI-1) |
+
+Planned kinds may stay in `config.yaml`: the registry lists them as unavailable.
+
+## Requirements
+
+- macOS on Apple Silicon for local models (`make setup` installs `requirements-mlx.txt` only there). The UI,
+  the compat server and cloud engines need only `requirements.txt`. The full `make test` needs mlx-vlm: its
+  local-engine tests use mlx-vlm's own checks.
+- Python 3.14 (the Makefile prefers pyenv 3.14.8, otherwise `python3` on `PATH`). Everything installs
+  into the project's `.venv`.
+- An OpenRouter API key for cloud engines.
+- `ffmpeg` for audio uploads (`brew install ffmpeg`).
+- Node.js for the frontend tests (optional: `make test` skips them without `node`).
+- About 4.6 GB of disk for the two 8-bit MLX models; 16–24 GB of RAM.
+
+## Quick start
 
 ```bash
-make setup                         # .venv, зависимости (+ requirements-mlx.txt на Apple Silicon), .env и config.yaml из примеров
-$EDITOR .env                       # OPENROUTER_API_KEY; права 600
-make models                        # скачать d1-2B и d1-Omni (8-bit MLX, ~4.6 ГБ) в HF_HOME
-make check                         # какие движки готовы, каталог, расход за сегодня
-make run                           # UI http://127.0.0.1:8790 и compat-сервер :8791
-make test                          # тесты без сети, ключей и моделей
+make setup     # .venv, dependencies (+ requirements-mlx.txt on Apple Silicon), .env and config.yaml from the examples
+$EDITOR .env   # OPENROUTER_API_KEY; mode 600
+make models    # download d1-2B and d1-Omni (8-bit MLX, ~4.6 GB) into HF_HOME
+make check     # which engines are ready, the catalog, today's spend
+make run       # UI at http://127.0.0.1:8790 and the compat server on :8791
+make test      # tests without network, keys or models
 ```
 
-- Workbench: вставить звонок (или выбрать пресет), задать вопросы, отметить движки, «Запустить». Оценка стоимости
-  видна до запуска, расход за день — в шапке.
-- Ссылки: `/?run=<id>` открывает прогон, `/?compare=<id1>,<id2>` сравнивает два.
-- Локальные модели: одна в памяти, выгружается через 10 минут простоя или кнопкой на экране «Локальные модели».
-- Наборы: `make import-tags` превращает 56 стандартных тегов whip-insight в пресеты вопросов и размеченные наборы
-  из их тестовых фраз (`WHIP=../whip-insight`), `make synth TAG=std_answering_machine` ставит фразы в нейтральные
-  диалоги. На экране «Наборы» — прогон по движкам с оценкой стоимости и отчёт: порог для тега whip-insight, кривая
-  «покрытие ↔ точность», диаграмма надёжности, расхождения. Свой набор — файл JSONL или CSV с метками.
-- Эксперименты: кнопка «Эксперимент…» в Workbench отправляет текущий звонок и вопросы на экран «Эксперименты»: те же
-  вопросы в других формулировках (например, по-английски), с вариантами в других порядках и по N раз. Отчёт: размах
-  повторов, сдвиг вероятностей от порядка и формулировки, тяга к первому варианту, тепловая карта.
-- Указатель по репликам: галочка в Workbench. Строка транскрипта — реплика, «Имя: текст» — участник. После «да» и
-  для лучшего варианта модель показывает реплику-доказательство (как указатель whip-insight); она подсвечена под
-  ответом с вероятностью. Проходы указателя платные и входят в оценку.
-- Извлечение (`text`, `number`, `date`, локальные d1): найденный фрагмент подсвечен в тексте звонка. Если модель
-  нашла «12 ноября 2026 года» или «триста пятьдесят тысяч рублей», но не дала значения, плейграунд читает фрагмент
-  сам и помечает: «нормализовано плейграундом». У `multi` — порог и выбранные варианты.
-- Аудио: кнопка «Медиа…» принимает запись (WAV, MP3, M4A, OGG, FLAC, WebM, AMR) и переводит её в WAV 16 кГц моно,
-  первые 30 секунд (`audio.max_seconds`); нужен `ffmpeg` (`brew install ffmpeg`). Записи лежат в `media/`, удалить —
-  `make clean-media`. Слышит только d1-Omni; пресет
-  «Тип звонка» (`call_kind`) — вопрос «человек, автоответчик, IVR…». Синтезированную речь модель слышит как робота:
-  точность проверяется на настоящих записях.
-- Матрица: кнопка «Проба» в строке движка проверяет, какие типы вопросов, сколько вариантов и уровней модель
-  обслуживает, по тем же запросам, что whip-insight. Галочка «длинный» добавляет проверку чтения всего контекста:
-  перед ней экран покажет оценку стоимости. Прогоны сразу берут профиль из пробы: вопрос, который модель не
-  обслуживает, не отправляется.
-- Compat-сервер для стенда whip-insight: в `.env` задать `SYSTEMONE_TOKEN` (≥ 32 символа, например
-  `openssl rand -hex 24`) и `COMPAT_HOST=0.0.0.0`; без токена сервер слушает только этот Mac. Проверка:
+## Using it
+
+- **Workbench.** Paste a call (or pick a preset), define questions, tick engines, press "Run". The cost
+  estimate shows before the run; the day's spend shows in the header. The draft (transcript and
+  questions) survives a page reload.
+- **History and links.** `/?run=<id>` opens a run, `/?compare=<id1>,<id2>` compares two,
+  `/?report=<id>` opens a dataset or experiment report, `/?tab=history` opens History.
+- **Local models.** One model in memory; it unloads after 10 minutes idle or by a button on the "Local
+  models" screen.
+- **Datasets.** `make import-tags` turns whip-insight's 56 standard tags into question presets and
+  labelled datasets from their test phrases (`WHIP=../whip-insight`). `make synth TAG=std_answering_machine`
+  places the phrases inside neutral dialogues. The "Datasets" screen runs a dataset over engines with a
+  cost estimate and builds the report: the threshold for a whip-insight tag, the "coverage ↔ accuracy"
+  curve, the reliability diagram, disagreements. An own dataset is a JSONL or CSV file with labels.
+- **Experiments.** "Experiment…" in Workbench sends the current call and questions to the
+  "Experiments" screen: the same questions in other wordings (for example in English), with options in
+  other orders, N times each. The report: repeat range, probability shift from order and wording,
+  first-option pull, a heatmap.
+- **Turn pointer.** A checkbox in Workbench. A transcript line is a turn; "Name: text" names the
+  participant. After "yes", and for the top option, the model points at the evidence turn (as the
+  whip-insight pointer does); it is highlighted under the answer with its probability. Pointer passes
+  are paid and are part of the estimate.
+- **Extraction** (`text`, `number`, `date`; local d1). The found fragment is highlighted in the call
+  text. If the model found "12 ноября 2026 года" or "триста пятьдесят тысяч рублей" but gave no value,
+  the playground reads the fragment itself and marks it "normalized by the playground". `multi` has a
+  threshold and shows the chosen options.
+- **Audio and pictures.** "Media…" takes a recording (WAV, MP3, M4A, OGG, FLAC, WebM, AMR) and converts
+  it to WAV 16 kHz mono, the first 30 seconds (`audio.max_seconds`); pictures: PNG, JPEG, WebP. Uploads
+  live in `media/`; `make clean-media` deletes them. Only d1-Omni hears audio. The preset "Call kind"
+  (`call_kind`) asks "human, answering machine, IVR…". The model hears synthesized speech as a robot:
+  accuracy is checked on real recordings.
+- **Capability matrix.** "Probe" on an engine row checks which question types, how many options and
+  levels the model serves, with the same requests as whip-insight. The "long" checkbox adds a
+  full-context read check; the screen shows its estimate first. Runs use the probe profile at once: a
+  question the model does not serve is not sent.
+- **Compat server for whip-insight.** Set `SYSTEMONE_TOKEN` (≥ 32 characters, e.g.
+  `openssl rand -hex 24`) and `COMPAT_HOST=0.0.0.0` in `.env`; without a token the server listens on
+  this Mac only. Check:
 
   ```bash
   curl -s http://127.0.0.1:8791/v1/systemone -H "Authorization: Bearer $SYSTEMONE_TOKEN" \
     -H 'Content-Type: application/json' -d @tests/fixtures/requests/whip_insight_systemone.json
   ```
 
-## Данные и лицензии
+## Make targets
 
-- Реальные звонки остаются на диске в `runs/` и `datasets/` (оба в `.gitignore`); в OpenRouter уходят с ZDR.
-- Черновик Workbench (транскрипт и вопросы) браузер хранит в `localStorage`, чтобы пережить перезагрузку; это копия
-  звонка вне `runs/`, и `make clean-runs` её не удаляет.
-- Открытые d1 — LFM Open License v1.0: коммерческое использование разрешено при годовой выручке компании меньше
-  $10 000 000. Владелец разрешил их 2026-11-08; на новой инсталляции условие проверяется заново.
+| Target | What it does |
+|---|---|
+| `make setup` | Create `.venv`, install requirements (+ MLX on Apple Silicon), create `.env` and `config.yaml` from the examples |
+| `make models` | Download the two 8-bit MLX models into `HF_HOME` |
+| `make run` / `make run-compat` | UI + compat server in the foreground / the compat server only |
+| `make run-bg` / `make stop` | The same in the background (log `/tmp/decision-playground.log`) / stop it |
+| `make check` | Availability of every engine, the catalog cache, today's spend |
+| `make test` | Python and frontend tests (no network, keys or models) |
+| `make smoke-local` | Opt-in real local path: loads d1-2B and d1-Omni, writes a log to `docs/reviews/` |
+| `make import-tags` | whip-insight's 56 standard tags → `presets/std_tags/` and `datasets/` (`WHIP=../whip-insight`) |
+| `make synth` | A tag's phrases inside neutral dialogues → `datasets/synth_<tag>` (`TAG=…`) |
+| `make clean-runs` / `make clean-media` | Delete `runs/` / `media/` (asks first) |
+| `make spike` | P0 spike: OpenRouter and both local d1 models ([SPIKE.md](docs/SPIKE.md)) |
 
-## Связь с whip-insight
+## Configuration
 
-Плейграунд ничего не пишет в whip-insight. Связи:
+- `.env` — keys, hosts and ports, `HF_HOME`, `DAILY_BUDGET_USD` (default 1 USD), `FFMPEG_BIN`,
+  `DATA_DIR`. Template with comments: [.env.example](.env.example).
+- `config.yaml` — the engine registry, local model manager, compat server limits, audio, cost estimate.
+  Template with comments: [config.example.yaml](config.example.yaml).
+- UI and `/api` listen only on `127.0.0.1:8790`. The compat server listens on `:8791`, on the LAN only
+  with `SYSTEMONE_TOKEN`.
+- Budget: a daily limit on paid calls with an estimate before every run.
 
-- **compat-сервер.** Он становится dev-профилем whip-insight (строка `cvj.decision_configs`), это отдельный
-  work-item после task-049.
-- **Пресеты.** Скрипт импорта читает файлы тегов из репозитория whip-insight.
-- **Находки.** Пороги и правила формулировок владелец переносит в замеры `SPEC-decision-service.md` §15.
+## Data, privacy and licenses
+
+- Real calls stay on disk in `runs/` and `datasets/` (both in `.gitignore`); they go to OpenRouter with
+  ZDR and `data_collection: deny`. A model without a ZDR endpoint is called only with a per-run consent.
+- The browser keeps the Workbench draft (transcript and questions) in `localStorage` to survive a
+  reload. It is a copy of the call outside `runs/`; `make clean-runs` does not remove it.
+- Reports contain no call text: ids, labels, probabilities and metrics only.
+- Open d1 weights are under LFM Open License v1.0: commercial use is allowed while the company's annual
+  revenue is below $10 000 000. The owner approved them on 2026-11-08; a new installation re-checks the
+  condition.
+
+## Relation to whip-insight
+
+The playground writes nothing into whip-insight. The links:
+
+- **Compat server.** It becomes a whip-insight dev profile (a `cvj.decision_configs` row) — a separate
+  whip-insight work-item after task-049.
+- **Presets.** The import script reads tag files from the whip-insight repository.
+- **Findings.** The owner copies thresholds and wording rules into the measurements of whip-insight
+  `SPEC-decision-service.md` §15.
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [docs/TASK.md](docs/TASK.md) | TASK 001: goals, owner decisions, use cases, requirements, acceptance records of P0–P6, risks |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, data model, engines, interfaces, security, reliability, configuration, tests |
+| [docs/BACKLOG.md](docs/BACKLOG.md) | Work-items; WI-1 is the P7 plan |
+| [docs/SPIKE.md](docs/SPIKE.md) | P0 spike: live measurements of mlx-vlm, OpenRouter Decisions and chat (Russian) |
+| [docs/DEVOPS_D1_OMNI.md](docs/DEVOPS_D1_OMNI.md) | d1-Omni on Ubuntu: llama-server behind LiteLLM (Russian) |
+| [docs/reviews/](docs/reviews/) | Adversarial review critique and response per increment |
+| [docs/DESIGN.md](docs/DESIGN.md) | Retired design document: a map from its old section numbers to the new places |
+
+## Project layout
+
+```text
+app/            FastAPI app, compat server, runner, engines/, local model manager, probe, datasets, experiments
+web/            index.html, styles.css, js/ — vanilla JS UI, own SVG charts
+presets/        question presets: call_kind, demos, std_tags/ (56 whip-insight tags), synth/ templates
+scripts/        tag import, synthetic dialogues, local smoke test, spike/ (P0)
+tests/          pytest suites, js/ frontend tests, fixtures/ (key-free provider records)
+docs/           TASK, ARCHITECTURE, BACKLOG, SPIKE, reviews/
+runs/ datasets/ probes/ reports/ media/   local data, not in git
+```

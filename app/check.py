@@ -1,4 +1,4 @@
-"""python -m app.check: every engine's availability, the catalog cache and today's budget (docs/DESIGN.md §7.6)."""
+"""python -m app.check: every engine's availability, the catalog cache and today's budget (docs/ARCHITECTURE.md §3.5.5)."""
 
 from __future__ import annotations
 

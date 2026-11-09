@@ -1,4 +1,4 @@
-"""Local d1 models through mlx-vlm, in process (docs/DESIGN.md §7.3, §8).
+"""Local d1 models through mlx-vlm, in process (docs/ARCHITECTURE.md §3.5.4, §3.6).
 
 P0 facts this engine relies on (docs/SPIKE.md §2):
 - `model.system_one(state, questions, media)` → {"answers": {...}, "usage": {"input_tokens": n, "output_tokens": 0}};

@@ -1,4 +1,4 @@
-// Local models (DESIGN §8, §16): state, size, snapshot, memory, unload; the compat server's address and token.
+// Local models (ARCHITECTURE §3.6): state, size, snapshot, memory, unload; the compat server's address and token.
 
 import * as api from './api.js';
 import { t } from './i18n.js';

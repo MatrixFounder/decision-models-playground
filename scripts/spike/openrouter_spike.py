@@ -1,4 +1,4 @@
-"""P0 spike: OpenRouter Decisions and chat completions (docs/DESIGN.md §7.2, §7.5, §13.2, §22 P0).
+"""P0 spike: OpenRouter Decisions and chat completions (docs/TASK.md §8.1 P0; docs/ARCHITECTURE.md §3.5.3, §3.9; WI-1).
 
 Without a key (public):
 - GET /api/v1/models?output_modalities=decisions  -> tests/fixtures/openrouter/catalog_decisions.json
@@ -12,7 +12,7 @@ provider {zdr: true, data_collection: deny}:
 - types it may not serve: choice+multiple, text, number, date, box, an unknown type -> status and error body;
 - choice 24/100/240 options, score 10 levels (probe steps 2-3);
 - a bad key -> 401 body.
-And one chat completion with logprobs to see `usage.cost` and `top_logprobs` (DESIGN §7.5 "проверить в P0").
+And one chat completion with logprobs to see `usage.cost` and `top_logprobs` (WI-1 P7.3; SPIKE §4).
 
 Writes tests/fixtures/openrouter/<model-slug>/*.json. Keys never reach a file: only status, a header whitelist and
 the response body are kept.

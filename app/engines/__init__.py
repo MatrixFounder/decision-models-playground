@@ -1,4 +1,4 @@
-"""Engines by kind (docs/DESIGN.md §7). Kinds that arrive later are listed with the increment that brings them."""
+"""Engines by kind (docs/ARCHITECTURE.md §3.5). Kinds that arrive later are listed with the increment that brings them."""
 
 from app.engines.base import BaseEngine
 from app.engines.mlx_local import MlxLocal

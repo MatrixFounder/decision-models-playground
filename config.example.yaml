@@ -1,14 +1,30 @@
-# Decision Models Playground — реестр движков (docs/DESIGN.md §7, §17.2).
-# Скопируйте в config.yaml. Ключи сюда не пишутся: они в .env.
+# Decision Models Playground — engine registry and limits (docs/ARCHITECTURE.md §10).
+# Copy to config.yaml (`make setup` does it). No secrets here: keys live in .env.
+#
+# Engine keys (unknown keys are an error, so a typo fails at start):
+#   id                 unique engine id; shown in the UI, stored in run records
+#   kind               openrouter_decisions | mlx_local | systemone_http | openrouter_llm
+#                      (systemone_http and openrouter_llm are planned, WI-1: listed as unavailable)
+#   model / repo       provider model id / Hugging Face repo of a local MLX model
+#   base_url           openrouter_*: own root for this engine (proxy, gateway), same rules as OPENROUTER_BASE_URL;
+#                      systemone_http: the server URL
+#   enabled            false: the engine stays listed, unavailable as "disabled in config.yaml" (default true)
+#   zdr                OpenRouter: send provider.zdr = true (default true); false needs a per-run consent
+#   max_request_bytes  refuse bigger requests as too_long before the call
+#   concurrency        parallel calls of a cloud engine (default 4); local engines take one call at a time
+#   timeout_s          deadline of one call (default 30); for a local engine also the longest wait in its queue
+#   context_tokens     local engines: prompt limit in tokens, rendered state plus questions (default 32768)
+#   audio              mlx_local: the model hears audio (d1-Omni only)
+#   mode               openrouter_llm: auto | logprobs | verbal (planned, WI-1)
 
 engines:
   # --- OpenRouter Decisions API (POST <OPENROUTER_BASE_URL>/api/alpha/decisions) ---
-  # base_url: https://gw.example.com/openrouter   # свой корень для одного движка (прокси, шлюз); иначе из .env
+  # base_url: https://gw.example.com/openrouter   # own root for one engine (proxy, gateway); otherwise from .env
   - id: or-jev-1.14
     kind: openrouter_decisions
-    model: typesafe/jev-1.14          # закреплённая версия
+    model: typesafe/jev-1.14          # pinned version
     zdr: true
-    max_request_bytes: 32000          # держит Jev в обычном режиме контекста (аудит §13.4)
+    max_request_bytes: 32000          # keeps Jev in its normal context mode (whip-insight audit §13.4)
     concurrency: 4
   - id: or-d1.1
     kind: openrouter_decisions
@@ -17,22 +33,22 @@ engines:
     concurrency: 4
   - id: or-d1-latest
     kind: openrouter_decisions
-    model: "~liquid/d1-latest"        # плавающий алиас; снимок берётся из ответа
+    model: "~liquid/d1-latest"        # floating alias; the snapshot comes from the answer
     zdr: true
     concurrency: 4
 
-  # --- Локальные d1 через mlx-vlm (Apple Silicon) ---
+  # --- Local d1 through mlx-vlm (Apple Silicon) ---
   - id: mlx-d1-2b
     kind: mlx_local
     repo: LiquidAI/d1-2B-MLX-8bit     # fp16: LiquidAI/d1-2B-MLX-fp16
-    context_tokens: 32768             # карточка: до ~64K; на Mac 24 ГБ 64K не помещается (SPIKE §2.4)
+    context_tokens: 32768             # the card allows ~64K; 64K does not fit a 24 GB Mac (SPIKE §2.4)
   - id: mlx-d1-omni
     kind: mlx_local
     repo: LiquidAI/d1-Omni-2B-MLX-8bit  # fp16: LiquidAI/d1-Omni-2B-MLX-fp16
     context_tokens: 32768
     audio: true
 
-  # --- Готовые серверы /v1/systemone (выключены по умолчанию) ---
+  # --- Ready-made /v1/systemone servers (planned, WI-1; disabled) ---
   - id: ollama-d1-2b
     kind: systemone_http
     base_url: http://127.0.0.1:11434/v1/systemone
@@ -43,12 +59,12 @@ engines:
     base_url: http://127.0.0.1:8080/v1/systemone   # llama-server -hf LiquidAI/d1-3B-GGUF:Q8_0
     enabled: false
 
-  # --- LLM-базовая линия (OpenRouter chat completions) ---
-  # id моделей задаёт владелец; одна из них — модель LLM-арбитра whip-insight.
+  # --- LLM baseline through OpenRouter chat completions (planned, WI-1; disabled) ---
+  # The owner sets the model ids; one of them is the whip-insight LLM arbiter.
   - id: llm-cheap
     kind: openrouter_llm
     model: "<openrouter model id>"
-    mode: auto                        # auto: logprobs, если модель их объявляет, иначе verbal
+    mode: auto                        # auto: logprobs when the model offers them, otherwise verbal
     enabled: false
   - id: llm-strong
     kind: openrouter_llm
@@ -56,28 +72,32 @@ engines:
     mode: auto
     enabled: false
 
+# Cost estimate before a call (docs/TASK.md §6.2): (tokens_per_char × characters + overhead_tokens) × input price.
+budget:
+  tokens_per_char: 1.5                # Jev bills 0.95–1.65 tokens per character, d1.1 about 0.43 (SPIKE §3)
+  overhead_tokens: 200
+  fallback_price_per_mtok: 0.2        # USD per 1M input tokens when neither the model nor the catalog has a price
+
 local:
-  max_loaded_models: 1                # Mac 16–24 ГБ: одна модель в памяти
-  idle_unload_s: 600
-  max_waiting: 8                      # больше ждущих — rate_limited в UI, 429 busy в compat
+  max_loaded_models: 1                # a 16–24 GB Mac holds one model; only 1 is accepted
+  idle_unload_s: 600                  # unload after this many idle seconds
+  max_waiting: 8                      # more waiting callers get rate_limited in the UI, 429 busy on compat
 
 compat:
-  default_model: mlx-d1-2b            # алиас из engines для POST /v1/systemone без поля model
+  default_model: mlx-d1-2b            # mlx_local engine id for POST /v1/systemone without a model field
   max_questions: 64
   max_body_mb: 6
-  max_images: 4                       # PNG, JPEG или WebP; whip-insight картинок не шлёт
-  max_image_pixels: 16000000          # d1 всё равно сжимает до 1.6 Мп
-  extensions_header: X-Playground-Extensions
-  allowed_hosts: ["127.0.0.1", "localhost", "*.local"]   # Host для compat; IP Mac добавить сюда, если звонят по IP
+  max_images: 4                       # PNG, JPEG or WebP; whip-insight sends no pictures
+  max_image_pixels: 16000000          # per picture, also for UI uploads; d1 downsizes to 1.6 MP anyway
+  extensions_header: X-Playground-Extensions   # with value 1 it unlocks multi/text/number/date on compat
+  # Host header values compat accepts; COMPAT_HOST is added on its own. Add the Mac's IP if callers use it.
+  allowed_hosts: ["127.0.0.1", "localhost", "*.local"]
 
 audio:
-  max_seconds: 30                     # длинная речь теряет точность (карточка d1-Omni)
-  sample_rate: 16000
+  max_seconds: 30                     # clip length, up to 600; long speech loses accuracy (d1-Omni card)
+  sample_rate: 16000                  # only 16000: what d1-Omni reads
 
-calibration:
-  target_accuracy: 0.90               # как whip-insight SPEC §12
-  thresholds: { from: 0.50, to: 0.99, step: 0.01 }
-
-experiments:
-  repeats: 5
-  max_permutations: 6
+# Not read from this file in v1:
+# - calibration: the target accuracy is 0.90 (app/metrics.py TARGET; per report: GET /api/reports/{id}?target=),
+#   thresholds run 0.50–0.99 in steps of 0.01;
+# - experiments: 5 repeats (1–20) and k = 6 option orders (2–24) are defaults of the Experiments screen.

@@ -1,4 +1,4 @@
-"""OpenRouter's public lists (docs/DESIGN.md §13.2), cached in probes/catalog.json.
+"""OpenRouter's public lists (docs/ARCHITECTURE.md §3.9), cached in probes/catalog.json.
 
 - GET /api/v1/models?output_modalities=decisions: price, context, inputs, expiry, `canonical_slug` (dated snapshot).
 - GET /api/v1/endpoints/zdr: ZDR endpoints; `model_id` is undated, the dated slug is only in `name` (SPIKE §3.6).

@@ -1,6 +1,6 @@
 """Entry point: python -m app
 
-One process, one event loop, two uvicorn servers sharing one local model manager (docs/DESIGN.md §5, §8):
+One process, one event loop, two uvicorn servers sharing one local model manager (docs/ARCHITECTURE.md §3.4, §3.6):
 - the UI and /api on APP_HOST:APP_PORT (loopback only);
 - the compat server POST /v1/systemone on COMPAT_HOST:COMPAT_PORT (LAN only behind SYSTEMONE_TOKEN, §9.2).
 
@@ -35,7 +35,7 @@ def main() -> None:
         from app.settings import ROOT, get_settings
 
         settings = get_settings()
-    except ValidationError as e:  # DESIGN §9.2: a bad host/token combination stops the process before it listens
+    except ValidationError as e:  # ARCHITECTURE §7.2: a bad host/token combination stops the process before it listens
         sys.exit(f"Настройки .env не приняты: {e.errors()[0]['msg']}")
 
     import uvicorn
@@ -53,7 +53,7 @@ def main() -> None:
     settings.ensure_dirs()
     env = ROOT / ".env"
     if env.is_file() and env.stat().st_mode & 0o077:
-        print("ВНИМАНИЕ: .env читают другие пользователи; выполните chmod 600 .env (DESIGN §18)", file=sys.stderr)
+        print("WARNING: other users can read .env; run chmod 600 .env (ARCHITECTURE §7.3)", file=sys.stderr)
     config, _ = load_config(settings.config_path)
     local = make_local(settings, config)
     servers: list[Server] = []

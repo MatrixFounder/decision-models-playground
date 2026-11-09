@@ -1,6 +1,6 @@
 """P0 spike: a running `/v1/systemone` server (Ollama, llama.cpp; later the playground's own compat server).
 
-DESIGN.md §7.4, §22 P0. Sends the core request, the whip-insight adapter body and one request per extended type,
+WI-1 (P7.2), docs/TASK.md §8.1. Sends the core request, the whip-insight adapter body and one request per extended type,
 then records status, latency and body under tests/fixtures/systemone/<name>/.
 
     .venv/bin/python scripts/spike/systemone_spike.py --name ollama-d1-2b \

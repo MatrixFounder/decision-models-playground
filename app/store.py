@@ -1,4 +1,4 @@
-"""Runs on disk (docs/DESIGN.md §10.1): runs/<day>/<id>.json plus one index line per run in runs/index.jsonl.
+"""Runs on disk (docs/ARCHITECTURE.md §4.3): runs/<day>/<id>.json plus one index line per run in runs/index.jsonl.
 
 Records never hold a key; `raw` is cut to 64 KB by the engine; media are referenced by path and sha256.
 """
@@ -26,7 +26,7 @@ def new_id() -> str:
 
 
 def local_day(ts: float | None = None) -> str:
-    """The budget and folder day: the Mac's local date (DESIGN §10.1, §19)."""
+    """The budget and folder day: the Mac's local date (ARCHITECTURE §4.3, TASK §6.2)."""
     return datetime.fromtimestamp(ts or time.time()).strftime("%Y-%m-%d")
 
 

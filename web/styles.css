@@ -276,7 +276,7 @@ table.history td button { padding: 2px 8px; }
   .q-opt { width: 90px; }
 }
 
-/* P6 modes (DESIGN §14): media chips, extraction spans, the cited turn, multi thresholds */
+/* P6 modes (ARCHITECTURE §3.10): media chips, extraction spans, the cited turn, multi thresholds */
 .media-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .media-row:empty { display: none; }
 .media-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 9px; font-size: 12px; }

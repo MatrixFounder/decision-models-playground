@@ -143,7 +143,7 @@ def test_a_run_over_the_budget_does_not_start(settings, upstream, local):
 
 def test_the_budget_running_out_mid_run_stops_the_rest(client, upstream, monkeypatch):
     """The estimate was too low: the reservation is topped up per call while the day allows, then the items left
-    are `budget`, not asked; the run is saved and ends with budget_stop (DESIGN §19). After the first $0.40 call a
+    are `budget`, not asked; the run is saved and ends with budget_stop (TASK §6.2). After the first $0.40 call a
     call holds $0.40, not its $0.000001 estimate: the day stops inside the limit."""
     import app.batch as batch
 

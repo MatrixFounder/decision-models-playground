@@ -1,4 +1,4 @@
-"""Question presets (docs/DESIGN.md §12, §20): presets/<id>.yaml and presets/<folder>/<id>.yaml.
+"""Question presets (docs/ARCHITECTURE.md §4.4): presets/<id>.yaml and presets/<folder>/<id>.yaml.
 
 A preset holds `questions` (and optionally a `state`) for the Workbench, and is a dataset's question set. Its id is
 its path under presets/ without `.yaml`: `call_kind`, `std_tags/std_answering_machine`. presets/synth/ holds the

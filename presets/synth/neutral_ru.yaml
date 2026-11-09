@@ -1,4 +1,4 @@
-# Neutral call-centre dialogues for scripts/synth_dialogs.py (DESIGN §12.2). `{line}` becomes "<speaker>: <phrase>",
+# Neutral call-centre dialogues for scripts/synth_dialogs.py (TASK UC-3). `{line}` becomes "<speaker>: <phrase>",
 # the speaker by the tag (`roles`, from whip-insight's «Проверяется в речи оператора») or else by its folder. No line
 # may fire a standard tag on its own — tests/test_synth_neutral.py runs every line through whip-insight's include
 # rules — so the label stays the phrase's own.

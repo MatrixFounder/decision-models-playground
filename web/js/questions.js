@@ -1,4 +1,4 @@
-// The question editor: an editable list ⇄ the request's {key: question} map (DESIGN §6.1).
+// The question editor: an editable list ⇄ the request's {key: question} map (ARCHITECTURE §4.1).
 
 import { t } from './i18n.js';
 
@@ -15,7 +15,7 @@ const el = (tag, attrs = {}, ...children) => {
   return node;
 };
 
-/** {key: question} → editable list. d1's own `choice` + `multiple: true` is the internal `multi` (DESIGN §6.1):
+/** {key: question} → editable list. d1's own `choice` + `multiple: true` is the internal `multi` (ARCHITECTURE §4.1):
  * dropping the flag here would send a multi-select question to the cloud as a plain choice (review P1, HIGH). */
 export function fromRequest(questions = {}) {
   return Object.entries(questions).map(([key, q]) => {

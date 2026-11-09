@@ -1,4 +1,4 @@
-"""The local model manager (docs/DESIGN.md §8, figure 2): one model in memory, one call at a time.
+"""The local model manager (docs/ARCHITECTURE.md §3.6, figure 2): one model in memory, one call at a time.
 
     unloaded --request--> loading --ok--> ready --request--> busy --answer--> ready
     loading --error--> unloaded;  ready --idle or eviction--> unloaded
@@ -115,7 +115,7 @@ class MlxThread(Executor):
 
 
 class SnapshotDates:
-    """`<repo>-<YYYYMMDD>` from the commit date of the cached revision (DESIGN §7.3), cached in probes/. Offline the
+    """`<repo>-<YYYYMMDD>` from the commit date of the cached revision (ARCHITECTURE §3.5.4), cached in probes/. Offline the
     snapshot stays undated — never invented — and the failed lookup is not repeated in this session."""
 
     def __init__(self, path: Path):

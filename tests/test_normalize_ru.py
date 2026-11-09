@@ -1,4 +1,4 @@
-"""The playground's own reading of Russian dates and numbers (DESIGN §14, SPIKE §2.2): the fragments mlx-vlm leaves
+"""The playground's own reading of Russian dates and numbers (TASK UC-7, SPIKE §2.2): the fragments mlx-vlm leaves
 without a value, and the ones that must stay None because reading them would be a guess."""
 
 from __future__ import annotations

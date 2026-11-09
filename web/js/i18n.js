@@ -1,4 +1,4 @@
-// Interface language: Russian or English (DESIGN §16). Strings only; data stays as entered.
+// Interface language: Russian or English (TASK §6.5). Strings only; data stays as entered.
 
 const STRINGS = {
   ru: {

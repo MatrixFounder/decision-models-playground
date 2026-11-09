@@ -1,4 +1,4 @@
-"""The daily limit on paid calls (docs/DESIGN.md §19).
+"""The daily limit on paid calls (docs/TASK.md §6.2, docs/ARCHITECTURE.md §9.3).
 
 Spent today = the cost of today's saved runs (runs/index.jsonl) plus what running runs have reserved. A run whose
 estimate exceeds what is left does not start. The reservation is released when the run is saved with its real cost.

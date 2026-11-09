@@ -1,4 +1,4 @@
-"""The internal contract (docs/DESIGN.md §6): a superset of System One in, one normalized shape out."""
+"""The internal contract (docs/ARCHITECTURE.md §4.1): a superset of System One in, one normalized shape out."""
 
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ class Question(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _d1_multiple(cls, data: Any) -> Any:
-        # d1's own form, {"type": "choice", "multiple": true}, is the internal `multi` (DESIGN §6.1)
+        # d1's own form, {"type": "choice", "multiple": true}, is the internal `multi` (ARCHITECTURE §4.1)
         if isinstance(data, dict) and "multiple" in data:
             data = dict(data)
             multiple = data.pop("multiple")
@@ -173,7 +173,7 @@ class ExtractResult(BaseModel):
     found: float | None = None
     interval: tuple[float, float] | None = None
     unit: str | None = None
-    # the playground's reading of `text` when the model gave no value (date, number; app/normalize_ru.py, DESIGN §14):
+    # the playground's reading of `text` when the model gave no value (date, number; app/normalize_ru.py, TASK UC-7):
     # never the model's own, and the UI says so
     normalized: Any = None
 
@@ -183,7 +183,7 @@ class Answer(BaseModel):
     probabilities: dict[str, float] = Field(default_factory=dict)
     top: str | None = None
     top_p: float | None = None
-    expected: float | None = None  # score: Σ i·p_i, computed here from probabilities (DESIGN §6.2)
+    expected: float | None = None  # score: Σ i·p_i, computed here from probabilities (ARCHITECTURE §4.1)
     vendor_confidence: float | None = None  # kept, never used in metrics: its meaning differs by provider
     extract: ExtractResult | None = None
 
@@ -196,7 +196,7 @@ class Usage(BaseModel):
 
 
 class PointerResult(BaseModel):
-    """The turn pointer of one answered question (DESIGN §14, UC-8; app/pointer.py)."""
+    """The turn pointer of one answered question (TASK UC-8; app/pointer.py)."""
 
     turn: str | None = None  # the cited turn, `t<n>`
     probability: float | None = None  # a two-pass turn: the product of both passes; one turn, not asked: None
@@ -226,7 +226,7 @@ class EngineResult(BaseModel):
 
     @classmethod
     def build(cls, engine_id: str, keys: list[str], answers: dict[str, Answer], failures: dict[str, str], **kw) -> EngineResult:
-        """Every requested key lands in exactly one of answers and question_failures (DESIGN §6.2) — unless the
+        """Every requested key lands in exactly one of answers and question_failures (ARCHITECTURE §4.1) — unless the
         request itself failed: then the keys without an answer or an own failure are covered by `request_failure`,
         not stamped `invalid_answer` (there was no answer to be invalid, review P1)."""
         failures = dict(failures)
@@ -297,7 +297,7 @@ class BudgetConfig(BaseModel):
 
 
 class LocalConfig(BaseModel):
-    max_loaded_models: Literal[1] = 1  # DESIGN §8: a 16-24 GB Mac holds one model
+    max_loaded_models: Literal[1] = 1  # ARCHITECTURE §3.6: a 16-24 GB Mac holds one model
     idle_unload_s: float = 600
     max_waiting: int = 8  # callers queued for the model beyond this get Busy (compat 429 busy, UI rate_limited)
 
@@ -315,7 +315,7 @@ class CompatConfig(BaseModel):
 class AudioConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # the d1-Omni card: long spoken passages lose accuracy (DESIGN §14); the clip length is an experiment axis
+    # the d1-Omni card: long spoken passages lose accuracy (TASK UC-6); the clip length is an experiment axis
     max_seconds: float = Field(30, gt=0, le=600)
     sample_rate: Literal[16000] = 16000  # what d1-Omni's audio tower reads (SPIKE §2.5)
 
@@ -344,4 +344,4 @@ class RunIn(BaseModel):
     tags: list[str] = Field(default_factory=list)
     title: str | None = None
     options: RunOptions = Field(default_factory=RunOptions)
-    pointer: bool = False  # the turn pointer (DESIGN §14, UC-8): the state is a transcript or {"fragments": [...]}
+    pointer: bool = False  # the turn pointer (TASK UC-8): the state is a transcript or {"fragments": [...]}

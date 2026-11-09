@@ -1,4 +1,4 @@
-"""The turn pointer (DESIGN §14, UC-8) by whip-insight's rules (SPEC-decision-service §8.2.4, decision-run.js):
+"""The turn pointer (TASK UC-8) by whip-insight's rules (SPEC-decision-service §8.2.4, decision-run.js):
 turns from t0, whip-insight's own windows, the preferred answer, one pass up to B, two passes past B, the whole request
 too_long past B², the money of the passes, and a pointer bug that must not sink billed answers (review P6)."""
 

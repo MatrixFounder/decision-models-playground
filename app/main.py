@@ -1,4 +1,4 @@
-"""The UI and /api on 127.0.0.1:8790 (docs/DESIGN.md §5, §15): engines, runs (SSE), history, budget, presets,
+"""The UI and /api on 127.0.0.1:8790 (docs/ARCHITECTURE.md §3.2, §5.1): engines, runs (SSE), history, budget, presets,
 catalog, estimate, local models."""
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ log = logging.getLogger("playground.main")
 UNLOAD_WAIT_S = 5
 MEDIA_SLOTS = 2  # uploads converted at once (ffmpeg up to 60 s each, in the executor the MLX prechecks share)
 MAX_UI_BODY = 16 * 1024 * 1024  # a run's request; a transcript is well under 1 MB (review round 3, noted)
-# DESIGN §18: the browser never frames this page and loads nothing from elsewhere (clickjacking, review P1)
+# ARCHITECTURE §7.1: the browser never frames this page and loads nothing from elsewhere (clickjacking, review P1)
 SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
@@ -132,7 +132,7 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
 
     @app.middleware("http")
     async def same_origin(request: Request, call_next):
-        # The UI has no auth and a run spends money: a write from another site's page is refused (DESIGN §18).
+        # The UI has no auth and a run spends money: a write from another site's page is refused (ARCHITECTURE §7.1).
         length = request.headers.get("content-length")
         if length is not None and (not (length.isascii() and length.isdigit()) or int(length) > MAX_UI_BODY):
             return JSONResponse({"detail": f"request body over {MAX_UI_BODY} bytes"}, status_code=413)
@@ -219,7 +219,7 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
             raise HTTPException(502, f"catalog refresh failed: {c.error}")
         return c.summary()
 
-    # --- probe and matrix (DESIGN §13) --------------------------------------------------------------------------
+    # --- probe and matrix (ARCHITECTURE §3.9) -------------------------------------------------------------------
     def probe_engine(request: Request, body: ProbeIn) -> BaseEngine:
         """The engine a probe may run on, or the reason it may not — before anything streams or is paid."""
         state = st(request)
@@ -312,7 +312,7 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
             raise HTTPException(400, f"the run cannot be repeated: {e.errors()[0]['msg']}") from None
         return stream(request, run_in)
 
-    # --- media (DESIGN §14 UC-6) --------------------------------------------------------------------------------------
+    # --- media (TASK UC-6, ARCHITECTURE §3.10) ------------------------------------------------------------------------
     @app.post("/api/media")
     async def upload_media(request: Request) -> dict[str, Any]:
         """The file is the body (no multipart); a picture is checked and kept, a recording converted (§14)."""
@@ -337,7 +337,7 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
             raise HTTPException(404, "no such upload")
         return FileResponse(path)
 
-    # --- local models (DESIGN §8, §16) --------------------------------------------------------------------------------
+    # --- local models (ARCHITECTURE §3.6) -----------------------------------------------------------------------------
     @app.get("/api/local/models")
     async def local_models(request: Request) -> dict[str, Any]:
         state = st(request)
@@ -365,7 +365,7 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
         except TimeoutError:
             raise HTTPException(409, "the model is busy; try again when the running call ends") from None
 
-    # --- datasets and reports (DESIGN §12) ---------------------------------------------------------------------------
+    # --- datasets and reports (ARCHITECTURE §3.8, §4.4) --------------------------------------------------------------
     def dataset_or_error(request: Request, name: str):
         try:
             return st(request).datasets.load(name)
@@ -435,7 +435,7 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
         return stream_events(request, lambda emit: state.dataset_runner.execute(ds, engines, run_in, emit),
                              DATASET_TERMINAL, "run_error")
 
-    # --- experiments (DESIGN §11) -------------------------------------------------------------------------------------
+    # --- experiments (ARCHITECTURE §3.8) ------------------------------------------------------------------------------
     def experiment_parts(request: Request, exp: ExperimentIn):
         state = st(request)
         try:

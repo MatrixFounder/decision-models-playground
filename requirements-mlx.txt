@@ -1,3 +1,8 @@
-# Local d1 models on Apple Silicon only (docs/DESIGN.md §7.3).
+# Local d1 models on Apple Silicon only (docs/ARCHITECTURE.md §3.5); `make setup` installs this file there.
 # The d1-2B-MLX and d1-Omni-2B-MLX cards require mlx-vlm >= 0.7.11.
 mlx-vlm>=0.7.11
+# Imported directly by app/local_models.py and `make models`; mlx-vlm brings them, listed because the code uses them
+mlx
+huggingface_hub
+tokenizers
+numpy

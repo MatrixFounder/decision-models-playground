@@ -1,5 +1,5 @@
 # Call kind: the seven options of whip-insight SPEC-decision-service.md §8.4 with their fixed descriptions
-# (DESIGN.md §14). Used by the audio mode (UC-6) and the P0 spike.
+# (docs/TASK.md UC-6). Used by the audio mode (UC-6) and the P0 spike.
 id: call_kind
 title: Тип звонка
 source: whip-insight docs/SPEC-decision-service.md §8.4

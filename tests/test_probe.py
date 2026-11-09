@@ -646,7 +646,7 @@ def test_a_snapshot_file_never_overwrites_latest_json():
 
 
 def test_the_runner_keeps_the_http_status_of_a_refusal(client, upstream):
-    """Workbench runs record the status a refusal came with, as probes read it (DESIGN §6.3)."""
+    """Workbench runs record the status a refusal came with, as probes read it (ARCHITECTURE §4.2)."""
     upstream.default = lambda body: httpx.Response(400, json={"error": {"message": "Invalid request", "code": 400}})
     res = run_once(client, {"state": "x", "questions": {"q": {"type": "noul", "instructions": "?"}}}, ["or-d1.1"])
     assert res["request_failure"] == "refused" and res["http_status"] == 400

@@ -1,4 +1,4 @@
-// Wiring: tabs, the draft, engines, estimate, run over SSE, budget, language (DESIGN §16).
+// Wiring: tabs, the draft, engines, estimate, run over SSE, budget, language (TASK §6.5).
 
 import * as api from './api.js';
 import { DatasetsView } from './datasets.js';
@@ -97,7 +97,7 @@ function runBody() {
   };
 }
 
-// --- media and the pointer (DESIGN §14) ----------------------------------------------------------------------------
+// --- media and the pointer (TASK UC-6, UC-8) -----------------------------------------------------------------------
 function mediaChip(m, i) {
   let what;
   if (m.type === 'audio') {

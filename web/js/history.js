@@ -1,4 +1,4 @@
-// History (DESIGN §10.1): list, filter by tag and engine, open, rerun, compare two runs.
+// History (TASK UC-1, ARCHITECTURE §4.3): list, filter by tag and engine, open, rerun, compare two runs.
 
 import * as api from './api.js';
 import { t } from './i18n.js';

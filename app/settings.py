@@ -1,4 +1,4 @@
-"""Settings from .env (docs/DESIGN.md §17.1). Keys live only here and never reach records, logs or API answers."""
+"""Settings from .env (docs/ARCHITECTURE.md §10.2). Keys live only here and never reach records, logs or API answers."""
 
 from __future__ import annotations
 
@@ -78,16 +78,16 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _hosts(self):
-        # DESIGN §3, §18: the UI has no auth, so it never listens beyond loopback. Only the two names the Host and
+        # TASK §4, ARCHITECTURE §7.1: the UI has no auth, so it never listens beyond loopback. Only the two names the Host and
         # Origin guards of app.main know: `::1` or 127.0.0.2 would pass a loopback test and then refuse every request.
         if self.app_host not in UI_HOSTS:
-            raise ValueError(f"APP_HOST must be one of {', '.join(UI_HOSTS)}, not {self.app_host!r} (DESIGN §18)")
+            raise ValueError(f"APP_HOST must be one of {', '.join(UI_HOSTS)}, not {self.app_host!r} (ARCHITECTURE §7.1)")
         if not math.isfinite(self.daily_budget_usd) or self.daily_budget_usd < 0:
             raise ValueError("DAILY_BUDGET_USD must be a finite number ≥ 0")
-        # DESIGN §9.2: the compat server leaves loopback only behind a token of at least 32 characters.
+        # ARCHITECTURE §7.2: the compat server leaves loopback only behind a token of at least 32 characters.
         token = self.systemone_token.get_secret_value() if self.systemone_token else None
         if token is not None and len(token) < MIN_TOKEN:
-            raise ValueError(f"SYSTEMONE_TOKEN must be at least {MIN_TOKEN} characters (DESIGN §9.2)")
+            raise ValueError(f"SYSTEMONE_TOKEN must be at least {MIN_TOKEN} characters (ARCHITECTURE §7.2)")
         if token is not None and (len(set(token)) < 10 or token != token.strip()):
             # 32 x "a" is long and worthless; `openssl rand -hex 24` gives 48 characters of 16 kinds (review P2)
             raise ValueError("SYSTEMONE_TOKEN is too uniform: use `openssl rand -hex 24`")
@@ -95,7 +95,7 @@ class Settings(BaseSettings):
             # Host checks compare names; a bracketed IPv6 literal never matches them (review round 2)
             raise ValueError("COMPAT_HOST is an IPv4 address or a host name (0.0.0.0 for every interface)")
         if not is_loopback(self.compat_host) and token is None:
-            raise ValueError(f"COMPAT_HOST={self.compat_host} needs SYSTEMONE_TOKEN (DESIGN §9.2)")
+            raise ValueError(f"COMPAT_HOST={self.compat_host} needs SYSTEMONE_TOKEN (ARCHITECTURE §7.2)")
         return self
 
     @property

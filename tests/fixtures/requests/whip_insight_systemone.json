@@ -1,5 +1,5 @@
 {
-  "_comment": "The body whip-insight's systemone adapter builds (whip-insight docs/architectures/decision-service.md §5.2, 2026-11-09): {model, state, questions}; boolean -> noul with criteria {true,false}; choice -> criteria {id: description}; score -> criteria [..]; a pointer pass -> choice with criteria {option id: null}; never `multiple`, never another type; no `provider` because the dev profile has require_zdr=false (DESIGN §9.3). Synthetic call.",
+  "_comment": "The body whip-insight's systemone adapter builds (whip-insight docs/architectures/decision-service.md §5.2, 2026-11-09): {model, state, questions}; boolean -> noul with criteria {true,false}; choice -> criteria {id: description}; score -> criteria [..]; a pointer pass -> choice with criteria {option id: null}; never `multiple`, never another type; no `provider` because the dev profile has require_zdr=false (docs/TASK.md §5.5). Synthetic call.",
   "model": "mlx-d1-2b",
   "state": "[t1] Оператор: Добрый день, компания «Ромашка», чем могу помочь?\n[t2] Клиент: Здравствуйте, я хочу вернуть деньги за заказ, товар пришёл бракованный.\n[t3] Оператор: Назовите номер заказа, пожалуйста.\n[t4] Клиент: Семь, два, ноль, один, пять.\n[t5] Оператор: Вижу заказ. Оформлю возврат, деньги придут за пять рабочих дней.\n[t6] Клиент: Спасибо, жду.",
   "questions": {

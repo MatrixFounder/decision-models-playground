@@ -1,4 +1,4 @@
-"""The capability probe (docs/DESIGN.md §13.1): a fixed set of requests per engine, read into a profile.
+"""The capability probe (docs/ARCHITECTURE.md §3.9): a fixed set of requests per engine, read into a profile.
 
 The same set and the same rule of evidence as whip-insight (SPEC-decision-service.md §5.6.2, decision-service.md
 §5.3), so the two profiles agree:

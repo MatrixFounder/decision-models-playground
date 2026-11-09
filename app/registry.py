@@ -1,4 +1,4 @@
-"""config.yaml → engine objects, each with its availability (docs/DESIGN.md §7.6, §17.2)."""
+"""config.yaml → engine objects, each with its availability (docs/ARCHITECTURE.md §3.5.5, §10.3)."""
 
 from __future__ import annotations
 

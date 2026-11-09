@@ -1,4 +1,4 @@
-"""The playground's own reading of Russian dates and numbers that mlx-vlm's parser leaves empty (DESIGN §14, SPIKE §2.2).
+"""The playground's own reading of Russian dates and numbers that mlx-vlm's parser leaves empty (TASK UC-7, SPIKE §2.2).
 
 The model finds the right fragment («12 ноября 2026 года», «триста пятьдесят тысяч рублей»), and mlx-vlm returns no
 value for it. These functions read such fragments. They never guess: a fragment they cannot read whole and without

@@ -1,4 +1,4 @@
-"""The compat server: POST /v1/systemone over the local model manager (docs/DESIGN.md §9).
+"""The compat server: POST /v1/systemone over the local model manager (docs/ARCHITECTURE.md §5.3).
 
 Contract for whip-insight's `systemone` adapter (its decision-service.md §5.2):
 - body {model, state, questions, images?} as Ollama takes it; `model` is an engine id of kind mlx_local, default

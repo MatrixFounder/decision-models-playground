@@ -1,4 +1,4 @@
-"""A labelled dataset run over several engines (docs/DESIGN.md §12, UC-3).
+"""A labelled dataset run over several engines (docs/ARCHITECTURE.md §3.8, UC-3).
 
 The calls, their lanes and the day's budget are app.batch's (shared with experiments): the estimate is reserved
 first, local engines take turns, cloud lanes run beside them, a low estimate overshoots the day by at most one call

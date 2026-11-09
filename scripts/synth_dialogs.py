@@ -1,4 +1,4 @@
-"""Synthetic dialogues from a labelled phrase dataset (docs/DESIGN.md §12.2).
+"""Synthetic dialogues from a labelled phrase dataset (docs/TASK.md §5.3, UC-3).
 
     .venv/bin/python scripts/synth_dialogs.py --from std_answering_machine [--template neutral_ru]
                                               [--per-phrase 2] [--seed 7] [--name synth_std_answering_machine]

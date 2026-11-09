@@ -1,4 +1,4 @@
-"""Import whip-insight's standard tags as presets and labelled datasets (docs/DESIGN.md §12.2).
+"""Import whip-insight's standard tags as presets and labelled datasets (docs/TASK.md §5.3, UC-3).
 
     .venv/bin/python scripts/import_std_tags.py --whip-insight ../whip-insight [--tags std_answering_machine,…]
                                                 [--presets-only] [--overwrite]

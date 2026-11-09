@@ -1,4 +1,4 @@
-"""Labelled datasets (docs/DESIGN.md §12.1): datasets/<name>/dataset.yaml + items.jsonl.
+"""Labelled datasets (docs/ARCHITECTURE.md §4.4): datasets/<name>/dataset.yaml + items.jsonl.
 
 dataset.yaml names the question set — a preset (`question_set: presets/std_tags/std_answering_machine.yaml`) or
 inline `questions` — and where the labels come from. Each line of items.jsonl is one item:

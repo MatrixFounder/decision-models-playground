@@ -1,4 +1,4 @@
-"""The stability report of an experiment (docs/DESIGN.md §11): engine × axis → metric, and a heatmap.
+"""The stability report of an experiment (docs/TASK.md §5.2, UC-2): engine × axis → metric, and a heatmap.
 
 Per engine and question, from the record alone (pure):
 
@@ -13,7 +13,7 @@ Per engine and question, from the record alone (pure):
 - **order** (`choice`, `multi`) — each question against its own orders: order j pools every cell that showed it (a
   shorter list cycles), and is compared with order 0 once, never with itself. |ΔP| of order 0's top option, and
   whether the top changed. The orders of several choice questions change together: an order effect of one question
-  can include the reorder of another (documented, DESIGN §11.1).
+  can include the reorder of another (documented, TASK §5.2 rule 2).
   *First position* (`choice` only): how often the top answer was the option shown first, against the share an
   order-invariant model would give on these very orders — the pooled top of its formulation, counted where it was
   shown first. Not 1/n: beyond 4 options the orders are random and need not put every option first equally often

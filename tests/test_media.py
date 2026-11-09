@@ -1,4 +1,4 @@
-"""Media uploads (DESIGN §14 UC-6, §15 POST /api/media): a recording becomes WAV 16 kHz mono 16-bit, cut to
+"""Media uploads (TASK UC-6, ARCHITECTURE §5.1 POST /api/media): a recording becomes WAV 16 kHz mono 16-bit, cut to
 `audio.max_seconds`; a picture is checked; the format comes from the bytes, and ffmpeg never follows a playlist."""
 
 from __future__ import annotations

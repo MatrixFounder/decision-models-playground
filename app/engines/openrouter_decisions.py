@@ -1,4 +1,4 @@
-"""OpenRouter Decisions (docs/DESIGN.md §7.2): POST <OPENROUTER_BASE_URL>/api/alpha/decisions, System One body.
+"""OpenRouter Decisions (docs/ARCHITECTURE.md §3.5.3): POST <OPENROUTER_BASE_URL>/api/alpha/decisions, System One body.
 
 Facts from P0 (docs/SPIKE.md §3) this engine relies on:
 - an unknown question type fails the whole request with 400; `error.message` is a zod error serialized as a string,

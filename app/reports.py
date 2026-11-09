@@ -1,4 +1,4 @@
-"""The calibration report of a dataset run (docs/DESIGN.md §12.3): JSON and Markdown, never a call's text.
+"""The calibration report of a dataset run (docs/TASK.md §5.3, UC-3): JSON and Markdown, never a call's text.
 
 Computed from the run record alone (item ids, labels, probabilities), so it can be recomputed for another target and
 holds what whip-insight §12 allows its replay report: ids, labels, probabilities and metrics. Results are grouped by

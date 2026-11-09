@@ -1,4 +1,4 @@
-// The question × engine table (DESIGN §16 Workbench): probability bars, top option, latency, cost, snapshot.
+// The question × engine table (TASK UC-1): probability bars, top option, latency, cost, snapshot.
 
 import { t } from './i18n.js';
 import { el } from './questions.js';

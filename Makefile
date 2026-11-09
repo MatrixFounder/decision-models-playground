@@ -1,5 +1,5 @@
 # Decision Models Playground. Every target runs through the project's .venv; the pyenv interpreter is never
-# installed into (docs/DESIGN.md §20, §22).
+# installed into (docs/ARCHITECTURE.md §10.4).
 
 # the owner's pyenv 3.14.8 when present, else the python3 on PATH (review P1)
 PYENV_PYTHON ?= $(firstword $(wildcard $(HOME)/.pyenv/versions/3.14.8/bin/python) $(shell command -v python3))

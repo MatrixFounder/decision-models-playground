@@ -1,4 +1,4 @@
-"""Calibration metrics of a labelled dataset run (docs/DESIGN.md §12.3). Pure functions: observations in, numbers out.
+"""Calibration metrics of a labelled dataset run (docs/TASK.md §5.3, UC-3). Pure functions: observations in, numbers out.
 
 Two readings of a threshold t, because they answer different questions:
 

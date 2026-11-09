@@ -1,4 +1,4 @@
-// Small SVG charts of the calibration report (DESIGN §16: own SVG, no CDN): the threshold curve and the reliability
+// Small SVG charts of the calibration report (TASK §6.5: own SVG, no CDN): the threshold curve and the reliability
 // diagram. The geometry is pure and tested with node --test; only `svg()` touches the DOM.
 
 const NS = 'http://www.w3.org/2000/svg';

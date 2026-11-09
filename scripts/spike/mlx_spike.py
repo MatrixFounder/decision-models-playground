@@ -1,4 +1,4 @@
-"""P0 spike: a local d1 model through mlx-vlm (docs/DESIGN.md §7.3, §8, §22 P0).
+"""P0 spike: a local d1 model through mlx-vlm (docs/ARCHITECTURE.md §3.5.4, §3.6; docs/TASK.md §8.1 P0).
 
 Measures, for one model per process (the Mac holds one model, §8):
 - the load call and its time, memory after load (MLX active/peak, process max RSS);
@@ -55,7 +55,7 @@ def mem(mx) -> dict:
 
 
 def snapshot_of(repo: str) -> dict:
-    """`<repo>-<YYYYMMDD of the HF revision>` (DESIGN §7.3) from the cached revision and its commit date."""
+    """`<repo>-<YYYYMMDD of the HF revision>` (ARCHITECTURE §3.5.4) from the cached revision and its commit date."""
     from huggingface_hub import HfApi, snapshot_download
 
     path = Path(snapshot_download(repo, local_files_only=True))

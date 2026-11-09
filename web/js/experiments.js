@@ -1,4 +1,4 @@
-// Experiments (DESIGN §11, §16): the Workbench's state and questions asked in other wordings, other option orders and
+// Experiments (TASK UC-2): the Workbench's state and questions asked in other wordings, other option orders and
 // N times over; the report shows engine × axis → metric and a heatmap of probabilities. Money and consent follow the
 // Datasets screen: a fresh estimate is confirmed before a paid run, and consent to skip ZDR lasts one run.
 

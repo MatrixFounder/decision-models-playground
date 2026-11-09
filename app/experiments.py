@@ -1,4 +1,4 @@
-"""Experiments (docs/DESIGN.md §11, UC-2): one state and a grid of variants, each variant a separate call.
+"""Experiments (docs/ARCHITECTURE.md §3.8, UC-2): one state and a grid of variants, each variant a separate call.
 
 The grid is formulations × option orders × repeats, asked of every engine:
 

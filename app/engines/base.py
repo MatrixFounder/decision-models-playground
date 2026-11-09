@@ -1,4 +1,4 @@
-"""The engine protocol, BaseEngine and the answer-name table (docs/DESIGN.md §6.2, §6.3, §7.1, §7.7)."""
+"""The engine protocol, BaseEngine and the answer-name table (docs/ARCHITECTURE.md §3.5.1, §3.5.2, §3.5.6, §4.2)."""
 
 from __future__ import annotations
 

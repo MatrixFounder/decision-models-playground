@@ -1,4 +1,4 @@
-"""Media uploads (DESIGN §14 UC-6, §15 `POST /api/media`): a picture is checked and kept; a recording becomes what
+"""Media uploads (TASK UC-6, ARCHITECTURE §5.1 `POST /api/media`): a picture is checked and kept; a recording becomes what
 d1-Omni hears (WAV, 16 kHz, mono, 16-bit), cut to `audio.max_seconds`.
 
 - The file lands in DATA_DIR/media under its content hash (`<sha256[:16]>.<ext>`): the same upload is one file, and
