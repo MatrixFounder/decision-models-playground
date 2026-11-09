@@ -300,21 +300,24 @@ export class DatasetsView {
     const key = this.presets.map((p) => p.id).join(',');
     if (this.importNode && this.importKey === key) return this.importNode;
     this.importKey = key;
-    const qset = el('select', { name: 'qset' }, el('option', { value: '' }, t('ds_inline_questions')),
+    // the labels carry data-i18n: a language switch relabels them in place (applyStatic), the typed values stay
+    const tr = (key) => el('span', { 'data-i18n': key }, t(key));
+    const qset = el('select', { name: 'qset' }, el('option', { value: '', 'data-i18n': 'ds_inline_questions' }, t('ds_inline_questions')),
       this.presets.map((p) => el('option', { value: p.id }, `${p.id} — ${p.title}`)));
     const form = el('form', { class: 'ds-import', onsubmit: (e) => { e.preventDefault(); this.upload(form); } },
-      el('label', {}, t('ds_file'), el('input', { type: 'file', name: 'file', accept: '.jsonl,.json,.csv,text/csv', required: true })),
-      el('label', {}, t('ds_name'), el('input', { name: 'dsname', placeholder: t('ds_name_ph') })),
-      el('label', {}, t('ds_question_set'), qset),
+      el('label', {}, tr('ds_file'), el('input', { type: 'file', name: 'file', accept: '.jsonl,.json,.csv,text/csv', required: true })),
+      el('label', {}, tr('ds_name'), el('input', { name: 'dsname', placeholder: t('ds_name_ph'), 'data-i18n-ph': 'ds_name_ph' })),
+      el('label', {}, tr('ds_question_set'), qset),
       el('textarea', { name: 'questions', class: 'mono', rows: 4, placeholder: '{"is_tag": {"type": "noul", "instructions": "…"}}' }),
-      el('label', {}, t('ds_label_source'), el('select', { name: 'source' },
-        el('option', { value: 'manual' }, t('ds_src_manual')), el('option', { value: 'test_phrases' }, t('ds_src_test_phrases')))),
-      el('label', { class: 'small' }, el('input', { type: 'checkbox', name: 'overwrite' }), ` ${t('ds_overwrite')}`),
-      el('div', { class: 'dim small' }, t('ds_format_hint')),
+      el('label', {}, tr('ds_label_source'), el('select', { name: 'source' },
+        el('option', { value: 'manual', 'data-i18n': 'ds_src_manual' }, t('ds_src_manual')),
+        el('option', { value: 'test_phrases', 'data-i18n': 'ds_src_test_phrases' }, t('ds_src_test_phrases')))),
+      el('label', { class: 'small' }, el('input', { type: 'checkbox', name: 'overwrite' }), ' ', tr('ds_overwrite')),
+      el('div', { class: 'dim small', 'data-i18n': 'ds_format_hint' }, t('ds_format_hint')),
       el('div', { class: 'error small' }, this.importError || ''),
-      el('button', { type: 'submit' }, t('ds_upload')));
+      el('button', { type: 'submit', 'data-i18n': 'ds_upload' }, t('ds_upload')));
     this.importNode = el('details', { class: 'panel', open: !!this.importNode?.open },
-      el('summary', {}, el('b', {}, t('ds_import'))), form);
+      el('summary', {}, el('b', { 'data-i18n': 'ds_import' }, t('ds_import'))), form);
     return this.importNode;
   }
 

@@ -232,6 +232,18 @@ def test_import_std_tags(tmp_path, whip, presets, capsys):
     assert import_std_tags.main(["--whip-insight", str(tmp_path / "none"), "--presets-only"]) == 2
 
 
+def test_import_says_kept_only_for_an_existing_dataset(tmp_path, whip, presets, capsys, monkeypatch):
+    """F27: any other failure is "not written" and the exit code says so."""
+    def broken(self, spec, items, overwrite=False):
+        raise DatasetError("disk full")
+
+    monkeypatch.setattr(DatasetStore, "create", broken)
+    code = import_std_tags.main(["--whip-insight", str(whip), "--data-dir", str(tmp_path / "d"),
+                                 "--presets-dir", str(presets), "--tags", "std_answering_machine"])
+    out = capsys.readouterr()
+    assert code == 1 and "not written — disk full" in out.err and ": kept —" not in out.out and "failed 1" in out.out
+
+
 def test_import_refuses_a_key_that_is_a_path(tmp_path, whip, presets, capsys):
     tags = whip / "taxonomy" / "standard-dictionaries" / "tags"
     (tags / "evil.json").write_text(json.dumps({"key": "../evil", "name": "x", "tests": {"positive": ["a"]}}))

@@ -494,3 +494,38 @@ def test_a_report_that_cannot_be_built_still_ends_the_run(client, upstream, monk
     monkeypatch.setattr(dr, "build_report", broken)
     done = run(client)[-1]
     assert done[0] == "run_done" and "NaN in a bin" in done[1]["report_error"] and done[1]["summary"] == []
+
+
+def test_the_report_endpoint_builds_off_the_event_loop(client, upstream, monkeypatch):
+    """Review P4 (F12): every target change rebuilt the report on the loop the compat server shares."""
+    import asyncio
+
+    import app.main as main_mod
+
+    upload(client)
+    upstream.default = GOOD
+    run_id = run(client)[-1][1]["run_id"]
+    real, on_loop = main_mod.build_report, []
+
+    def spy(record, target):
+        try:
+            asyncio.get_running_loop()
+            on_loop.append(True)
+        except RuntimeError:  # a worker thread has no running loop
+            on_loop.append(False)
+        return real(record, target)
+
+    monkeypatch.setattr(main_mod, "build_report", spy)
+    assert client.get(f"/api/reports/{run_id}", params={"target": 0.8}).status_code == 200
+    assert client.get(f"/api/reports/{run_id}", params={"format": "md"}).status_code == 200
+    assert on_loop == [False, False]
+
+
+def test_a_nan_estimate_stops_a_workbench_run_too(client, upstream, monkeypatch):
+    """F26 in the runner: NaN compares false, so `reserved > 0` skipped the budget check; now it is budget_stop."""
+    monkeypatch.setattr(OpenRouterDecisions, "estimate_cost", lambda self, req: float("nan"))
+    with client.stream("POST", "/api/runs", json={"request": {"state": "x", "questions": QUESTIONS},
+                                                 "engines": ["or-d1.1"]}) as r:
+        events = parse_sse("".join(r.iter_text()))
+    assert [n for n, _ in events] == ["budget_stop"] and events[0][1]["estimate_usd"] is None
+    assert not upstream.calls

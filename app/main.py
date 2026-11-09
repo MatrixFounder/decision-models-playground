@@ -402,13 +402,15 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
             raise HTTPException(404, "no dataset run with this id")
         if not 0.5 <= target <= 0.99:
             raise HTTPException(400, "target is between 0.5 and 0.99")
-        rep = build_report(record, target)
+        if format not in ("json", "md"):
+            raise HTTPException(400, "format is json or md")
+        # off the event loop: a 5 000-item report takes seconds, and the compat server shares this loop (review P4)
+        rep = await asyncio.to_thread(build_report, record, target)
         if format == "md":
             name = f"{record['dataset']['name']}-{record['day']}-{run_id}.md"
-            return PlainTextResponse(render_markdown(rep, lang), media_type="text/markdown; charset=utf-8",
+            text = await asyncio.to_thread(render_markdown, rep, lang)
+            return PlainTextResponse(text, media_type="text/markdown; charset=utf-8",
                                      headers={"Content-Disposition": f'attachment; filename="{name}"'})
-        if format != "json":
-            raise HTTPException(400, "format is json or md")
         return rep
 
     # --- presets -----------------------------------------------------------------------------------------------------
