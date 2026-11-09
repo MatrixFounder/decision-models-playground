@@ -1,6 +1,7 @@
 // Wiring: tabs, the draft, engines, estimate, run over SSE, budget, language (DESIGN §16).
 
 import * as api from './api.js';
+import { DatasetsView } from './datasets.js';
 import { History, isWorkbenchRun, notWorkbenchMessage } from './history.js';
 import { applyStatic, getLang, setLang, t } from './i18n.js';
 import { LocalModelsView } from './local.js';
@@ -25,9 +26,10 @@ const ui = {
 };
 
 const editor = new QuestionEditor($('#questions'), () => userEdited());
-const history = new History($('#history'), { onOpen: openRun, onRerun: rerunRun });
+const history = new History($('#history'), { onOpen: openRun, onRerun: rerunRun, onOpenReport: (id) => openReport(id) });
 const localView = new LocalModelsView($('#local'));
 const matrixView = new MatrixView($('#matrix'), { onBudget: () => loadBudget() });
+const datasetsView = new DatasetsView($('#datasets'), { getEngines: () => ui.engines, onBudget: () => loadBudget() });
 
 // --- storage (a per-viewer convenience: the page works without it) -------------------------------------------------
 function readDraft() {
@@ -250,7 +252,17 @@ async function rerunRun(id) {
 }
 
 /** Show a saved run in the Workbench. The user's draft is kept aside first and can be restored (review P1). */
+/** A dataset run's report on the Datasets screen. */
+function openReport(id) {
+  switchTab('datasets', { load: false });
+  datasetsView.load().then(() => datasetsView.openReport(id));
+}
+
 function openRun(record) {
+  if (record.kind === 'dataset') {  // /?run=<id> of a dataset run: its report
+    openReport(record.id);
+    return false;
+  }
   if (!isWorkbenchRun(record)) {  // a probe is not a Workbench run (its results are on the matrix)
     $('#run-error').textContent = notWorkbenchMessage(record.kind);
     return false;
@@ -341,8 +353,10 @@ function setQuestions(questions) {
 async function loadPresets() {
   const { presets } = await api.getPresets();
   const sel = $('#preset');
-  sel.replaceChildren(el('option', { value: '' }, t('preset')),
-    ...presets.map((p) => el('option', { value: p.id, disabled: !!p.error }, p.title)));
+  const option = (p) => el('option', { value: p.id, disabled: !!p.error }, p.title);
+  const groups = [...new Set(presets.map((p) => p.group).filter(Boolean))];  // std_tags/…: the imported tags
+  sel.replaceChildren(el('option', { value: '' }, t('preset')), ...presets.filter((p) => !p.group).map(option),
+    ...groups.map((g) => el('optgroup', { label: g }, presets.filter((p) => p.group === g).map(option))));
   return presets;
 }
 async function applyPreset(id) {
@@ -353,13 +367,15 @@ async function applyPreset(id) {
 }
 
 // --- tabs and language ---------------------------------------------------------------------------------------------
-function switchTab(tab) {
+function switchTab(tab, { load = true } = {}) {
   ui.tab = tab;
   document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   $('#tab-workbench').hidden = tab !== 'workbench';
   $('#tab-history').hidden = tab !== 'history';
   $('#tab-local').hidden = tab !== 'local';
   $('#tab-matrix').hidden = tab !== 'matrix';
+  $('#tab-datasets').hidden = tab !== 'datasets';
+  if (tab === 'datasets' && load) loadEngines().catch(() => {}).then(() => datasetsView.load());
   if (tab === 'history') history.load();
   if (tab === 'local') localView.load();
   if (tab === 'matrix') matrixView.load();
@@ -377,6 +393,7 @@ function relabel() {
   if (ui.tab === 'history') history.render();
   if (ui.tab === 'local') localView.render();
   if (ui.tab === 'matrix') matrixView.render();
+  if (ui.tab === 'datasets') datasetsView.render();
   onDraftChange();
 }
 
@@ -433,7 +450,11 @@ async function start() {
     switchTab('history');
     await history.load();
     await history.compare();
-  } else if (['history', 'local', 'matrix'].includes(params.get('tab'))) switchTab(params.get('tab'));
+  } else if (params.get('report')) {  // /?report=<run id> opens a dataset run's report
+    switchTab('datasets', { load: false });
+    await datasetsView.load();
+    await datasetsView.openReport(params.get('report'));
+  } else if (['history', 'local', 'matrix', 'datasets'].includes(params.get('tab'))) switchTab(params.get('tab'));
 }
 
 start();

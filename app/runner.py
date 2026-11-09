@@ -16,6 +16,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import math
 import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -103,9 +104,11 @@ class Runner:
             est = self.estimate(run_in)
             reserved = est["total_usd"]
             # free engines (local models) run even when the day's money is spent
-            if reserved > 0 and not self.budget.reserve(reserved):
+            if not math.isfinite(reserved) or reserved > 0 and not self.budget.reserve(reserved):
                 reserved = 0.0
-                await emit("budget_stop", {"estimate_usd": est["total_usd"], **self.budget.status()})
+                total = est["total_usd"]
+                await emit("budget_stop", {"estimate_usd": total if math.isfinite(total) else None,
+                                           **self.budget.status()})
                 return None
 
             run_id = new_id()
@@ -125,7 +128,7 @@ class Runner:
             record = {
                 "id": run_id,
                 "created_at": datetime.fromtimestamp(now, UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "day": local_day(now),
+                "day": local_day(),  # the day the money is counted on: when it was spent, at the end
                 "kind": kind,
                 "title": run_in.title,
                 "tags": run_in.tags,

@@ -107,3 +107,14 @@ export const runCompare = (body, onEvent) => streamPost('/api/runs', body, onEve
 export const rerun = (id, options, onEvent) => streamPost(`/api/runs/${encodeURIComponent(id)}/rerun`, options, onEvent);
 export const probe = (body, onEvent) => streamPost('/api/probe', body, onEvent);
 export const probeEstimate = (body) => post('/api/probe/estimate', body);
+export const listDatasets = () => json('/api/datasets');
+export const getDataset = (name, params = {}) => {
+  const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== ''));
+  return json(`/api/datasets/${encodeURIComponent(name)}${q.size ? `?${q}` : ''}`);
+};
+export const uploadDataset = (body) => post('/api/datasets', body);
+export const estimateDataset = (name, body) => post(`/api/datasets/${encodeURIComponent(name)}/estimate`, body);
+export const runDataset = (name, body, onEvent) => streamPost(`/api/datasets/${encodeURIComponent(name)}/run`, body, onEvent);
+export const reportUrl = (id, format = 'json', lang = 'ru', target = 0.9) =>
+  `/api/reports/${encodeURIComponent(id)}?${new URLSearchParams({ format, lang, target: String(target) })}`;
+export const getReport = (id, target = 0.9) => json(reportUrl(id, 'json', 'ru', target));

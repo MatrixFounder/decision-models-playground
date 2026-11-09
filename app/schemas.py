@@ -263,9 +263,9 @@ class EngineSpec(BaseModel):
 
 class BudgetConfig(BaseModel):
     # P1 measured Jev at 0.95-1.65 tokens per character and d1.1 at about 0.43: 1.5 x chars + 200 covers every P0 call.
-    tokens_per_char: float = 1.5
-    overhead_tokens: int = 200
-    fallback_price_per_mtok: float = 0.2
+    tokens_per_char: float = Field(1.5, ge=0, allow_inf_nan=False)
+    overhead_tokens: int = Field(200, ge=0)
+    fallback_price_per_mtok: float = Field(0.2, ge=0, allow_inf_nan=False)  # NaN would void every budget check
 
 
 class LocalConfig(BaseModel):

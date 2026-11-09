@@ -12,9 +12,11 @@ PORT         := $(if $(strip $(PORT)),$(strip $(PORT)),8790)
 COMPAT_PORT  ?= $(shell grep -E '^COMPAT_PORT=' .env 2>/dev/null | cut -d= -f2)
 COMPAT_PORT  := $(if $(strip $(COMPAT_PORT)),$(strip $(COMPAT_PORT)),8791)
 LOG          ?= /tmp/decision-playground.log
+WHIP         ?= ../whip-insight
+TAG          ?= std_answering_machine
 
 .DEFAULT_GOAL := help
-.PHONY: help setup models run run-compat run-bg stop check test smoke-local clean-runs spike spike-openrouter spike-mlx spike-audio clean-venv
+.PHONY: help setup models run run-compat run-bg stop check test smoke-local import-tags synth clean-runs spike spike-openrouter spike-mlx spike-audio clean-venv
 
 help:
 	@echo "make setup            - create .venv, install requirements (+ requirements-mlx.txt on Apple Silicon)"
@@ -25,6 +27,8 @@ help:
 	@echo "make check            - availability of every engine, catalog cache, today's budget"
 	@echo "make test             - Python and frontend tests (no network, no keys, no models)"
 	@echo "make smoke-local      - opt-in: the real local path (loads d1-2B and d1-Omni), log in docs/reviews/"
+	@echo "make import-tags      - whip-insight's 56 standard tags → presets/std_tags/ and datasets/ (WHIP=$(WHIP))"
+	@echo "make synth            - a tag's phrases inside neutral dialogues → datasets/synth_<tag> (TAG=$(TAG))"
 	@echo "make clean-runs       - delete runs/ (asks first)"
 	@echo "make spike            - P0: OpenRouter + both local d1 models (docs/SPIKE.md)"
 	@echo "make spike-openrouter - P0: catalog, ZDR list, Decisions calls (needs OPENROUTER_API_KEY in .env)"
@@ -68,6 +72,12 @@ test: $(PY)
 
 smoke-local: $(PY)
 	@$(PY) scripts/smoke_local.py
+
+import-tags: $(PY)
+	@$(PY) scripts/import_std_tags.py --whip-insight $(WHIP)
+
+synth: $(PY)
+	@$(PY) scripts/synth_dialogs.py --from $(TAG)
 
 clean-runs:
 	@printf "Delete runs/ with every saved run? [y/N] "; read a; [ "$$a" = "y" ] && rm -rf runs && echo "==> runs/ deleted" || echo "==> kept"

@@ -67,6 +67,17 @@ def index_row(record: dict[str, Any]) -> dict[str, Any]:
         profile = record.get("profile") or {}
         status = {engine_id: "ok" if record.get("profile") else "failed"}
         snapshots = {engine_id: profile["snapshot"]} if profile.get("snapshot") else {}
+    elif record.get("kind") == "dataset":
+        # per engine over the items: ok when every item answered, failed when none did
+        status, snapshots = {}, {}
+        for e in record.get("engines", []):
+            eid = e["engine_id"]
+            per = [(it.get("results") or {}).get(eid) or {} for it in record.get("items", [])]
+            states = {r.get("status") for r in per}
+            status[eid] = "ok" if states == {"ok"} else "failed" if states <= {"failed", None} else "partial"
+            snap = next((r["snapshot"] for r in reversed(per) if r.get("snapshot")), None)
+            if snap:
+                snapshots[eid] = snap
     else:
         status = {r["engine_id"]: r["status"] for r in results}
         snapshots = {r["engine_id"]: r["snapshot"] for r in results if r.get("snapshot")}
@@ -82,6 +93,7 @@ def index_row(record: dict[str, Any]) -> dict[str, Any]:
         "cost_usd": record.get("cost_usd") or 0.0,
         "status": status,
         "snapshots": snapshots,  # the matrix marks a probe stale when a later run answered as another snapshot
+        **({"dataset": (record.get("dataset") or {}).get("name")} if record.get("kind") == "dataset" else {}),
     }
 
 

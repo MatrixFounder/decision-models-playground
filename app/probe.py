@@ -500,7 +500,7 @@ class Prober:
             record = {
                 "id": run_id,
                 "created_at": datetime.fromtimestamp(t0, UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "day": local_day(t0),
+                "day": local_day(),  # the day the money is counted on: when it was spent, at the end
                 "kind": "probe",
                 "title": f"probe {engine_id}",
                 "tags": [],  # the kind already says "probe" (History shows it once)

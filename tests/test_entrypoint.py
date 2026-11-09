@@ -69,7 +69,7 @@ def test_both_servers_start_and_stop_cleanly_on_sigterm(tmp_path):
             proc.kill()
 
 
-def start_hung(tmp_path: Path) -> tuple[subprocess.Popen, dict]:
+def start_hung(tmp_path: Path, **env: str) -> tuple[subprocess.Popen, dict]:
     """The compat server with a model call that never returns, and one request stuck inside it. Waits until
     /health says `busy` (no sleep-and-hope); kills the child if start-up fails (round 3: it leaked)."""
     import threading
@@ -77,7 +77,7 @@ def start_hung(tmp_path: Path) -> tuple[subprocess.Popen, dict]:
     port = free_port()
     log = (tmp_path / "child.log").open("w")  # drained to a file: a PIPE nobody reads can fill and block the child
     proc = subprocess.Popen([str(PY), str(ROOT / "tests" / "hang_app.py"), "--compat-only"], cwd=ROOT,
-                            env=env_for(tmp_path, COMPAT_PORT=str(port)), stdout=log, stderr=subprocess.STDOUT)
+                            env=env_for(tmp_path, COMPAT_PORT=str(port), **env), stdout=log, stderr=subprocess.STDOUT)
     reply: dict = {}
     try:
         deadline = time.time() + 30
@@ -131,12 +131,16 @@ def test_one_sigterm_stops_a_process_whose_model_call_hangs(tmp_path):
 
 @pytest.mark.timeout(60)
 def test_a_second_sigterm_forces_the_exit(tmp_path):
-    """The hard exit of the second signal is `os._exit(1)` after 3 s: return code 1 tells it from a clean exit (0),
-    which a looser time window could not (round 3)."""
-    proc, _ = start_hung(tmp_path)
+    """The hard exit of the second signal is `os._exit(1)` after 3 s. The child holds a thread that is neither a
+    daemon nor ever done, so no clean exit is possible: whatever the timing, only the hard exit ends it, and code 1
+    proves it fired (review P4: a forced clean exit in 0.8 s, code 0, could pass for it under load)."""
+    proc, reply = start_hung(tmp_path, HANG_HOLD_EXIT="1")
     try:
         proc.send_signal(signal.SIGTERM)
-        time.sleep(0.2)
+        deadline = time.time() + 5
+        while "at" not in reply:  # the first signal landed: begin_close answered the stuck request
+            assert time.time() < deadline, "the first SIGTERM did not reach the server"
+            time.sleep(0.02)
         t0 = time.time()
         proc.send_signal(signal.SIGTERM)
         assert proc.wait(timeout=10) == 1

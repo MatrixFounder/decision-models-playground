@@ -34,9 +34,10 @@ test('only a comparative run opens, reruns and compares in the Workbench', () =>
   assert.equal(isWorkbenchRun({}), true);  // records before P3 have no kind
   for (const kind of ['probe', 'dataset', 'experiment']) {
     assert.equal(isWorkbenchRun({ kind }), false);
-    assert.deepEqual(rowActions({ kind, tags: [] }), { open: false, rerun: false, pick: false, tags: [] });
+    // a dataset run opens as its report (P4); a probe and an experiment have no Workbench view
+    assert.deepEqual(rowActions({ kind, tags: [] }), { open: kind === 'dataset' ? 'report' : null, rerun: false, pick: false, tags: [] });
   }
-  assert.deepEqual(rowActions({ kind: 'compare', tags: ['a'] }), { open: true, rerun: true, pick: true, tags: ['a'] });
+  assert.deepEqual(rowActions({ kind: 'compare', tags: ['a'] }), { open: 'run', rerun: true, pick: true, tags: ['a'] });
 });
 
 test('a probe row shows its kind once, and the message names the kind', () => {

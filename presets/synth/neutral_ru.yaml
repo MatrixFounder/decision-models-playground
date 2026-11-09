@@ -1,0 +1,46 @@
+# Neutral call-centre dialogues for scripts/synth_dialogs.py (DESIGN §12.2). `{line}` becomes "<speaker>: <phrase>",
+# the speaker by the tag (`roles`, from whip-insight's «Проверяется в речи оператора») or else by its folder. No line
+# may fire a standard tag on its own — tests/test_synth_neutral.py runs every line through whip-insight's include
+# rules — so the label stays the phrase's own.
+id: neutral_ru
+title: Нейтральные диалоги колл-центра
+language: ru
+roles:
+  operator: Оператор
+  client: Клиент
+speakers:
+  etiquette: Оператор
+  operator_speech: Оператор
+  default: Клиент
+dialogs:
+  - |
+    Оператор: Компания «Вектор», слушаю.
+    Клиент: Я по поводу заказа номер сорок два.
+    {line}
+    Оператор: Сейчас проверю данные в системе.
+  - |
+    {line}
+    Оператор: Уточните, пожалуйста, номер договора.
+    Клиент: Три, семь, один, пять.
+    Оператор: Вижу ваш договор.
+  - |
+    Оператор: Отдел доставки.
+    Клиент: Курьер приедет сегодня?
+    Оператор: Заказ передан в службу доставки утром.
+    {line}
+  - |
+    Клиент: Я хотел узнать про тариф.
+    Оператор: Какой тариф вас интересует?
+    {line}
+    Клиент: Тот, что с интернетом.
+    Оператор: Он стоит пятьсот рублей в месяц.
+  - |
+    Оператор: Банк «Север», отдел карт.
+    {line}
+    Клиент: Карта у меня с прошлой недели.
+    Оператор: Её нужно активировать в приложении.
+  - |
+    Клиент: Подскажите время работы офиса.
+    Оператор: С девяти до шести по будням.
+    Клиент: А в субботу?
+    {line}

@@ -3,6 +3,7 @@ returns, as after a Metal fault (review round 2). Run as: python tests/hang_app.
 
 from __future__ import annotations
 
+import os
 import sys
 import threading
 import time
@@ -44,6 +45,11 @@ class HangBackend:
 
 
 lm.make_local = lambda settings, config: LocalModels(HangBackend(), idle_unload_s=600)
+
+if os.environ.get("HANG_HOLD_EXIT") == "1":
+    # a thread that is not a daemon and never ends: the interpreter cannot exit by itself, so only os._exit — the
+    # second signal's hard exit — ends the process (review P4: a fast clean exit could pass for it)
+    threading.Thread(target=threading.Event().wait, daemon=False, name="hold-exit").start()
 
 if __name__ == "__main__":
     from app.__main__ import main

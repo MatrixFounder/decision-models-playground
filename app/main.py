@@ -5,32 +5,35 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import json
 import logging
 import socket
 import subprocess
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Any
 
-import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from app import __version__
 from app.budget import Budget
 from app.catalog import Catalog
+from app.dataset_run import DATASET_TERMINAL, DatasetRunIn, DatasetRunner
+from app.datasets import DatasetError, DatasetExists, DatasetNotFound, DatasetStore, DatasetUpload, parse_items
 from app.engines.base import BaseEngine
 from app.engines.mlx_local import MlxLocal
 from app.local_models import LocalModels, make_local
-from app.probe import PROBE_TERMINAL, PROBED_KINDS, Prober, ProbeIn, matrix_rows, valid_engine_id
+from app.presets import PresetError, PresetNotFound, list_presets, load_preset
+from app.probe import PROBE_TERMINAL, PROBED_KINDS, ProbeIn, Prober, matrix_rows, valid_engine_id
 from app.registry import Registry, load_config
+from app.reports import build_report, render_markdown
 from app.runner import TERMINAL, Runner, RunRejected, sse
-from app.schemas import Question, RunIn, RunOptions
+from app.schemas import RunIn, RunOptions
 from app.settings import ROOT, UI_HOSTS, Settings, get_settings, is_loopback
 from app.store import Store
 
@@ -38,7 +41,6 @@ WEB = ROOT / "web"
 log = logging.getLogger("playground.main")
 UNLOAD_WAIT_S = 5
 MAX_UI_BODY = 16 * 1024 * 1024  # a run's request; a transcript is well under 1 MB (review round 3, noted)
-PRESETS = ROOT / "presets"
 # DESIGN §18: the browser never frames this page and loads nothing from elsewhere (clickjacking, review P1)
 SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
@@ -75,8 +77,12 @@ def build_state(settings: Settings, transport=None, local: LocalModels | None = 
     store = Store(settings.runs_dir)
     budget = Budget(settings.daily_budget_usd, store)
     prober = Prober(store, budget, registry.ctx.probes, settings.data_dir / "media")
+    runner = Runner(registry, store, budget)
+    datasets = DatasetStore(settings.data_dir / "datasets")
+    dataset_runner = DatasetRunner(runner, datasets, store, budget, settings.data_dir / "reports")
     return {"settings": settings, "catalog": catalog, "registry": registry, "store": store, "budget": budget,
-            "runner": Runner(registry, store, budget), "prober": prober, "tasks": set(), "local": local,
+            "runner": runner, "prober": prober, "datasets": datasets, "dataset_runner": dataset_runner,
+            "tasks": set(), "local": local,
             "owns_local": owns_local}
 
 
@@ -319,39 +325,105 @@ def create_app(settings: Settings | None = None, transport=None, refresh_catalog
         except TimeoutError:
             raise HTTPException(409, "the model is busy; try again when the running call ends") from None
 
+    # --- datasets and reports (DESIGN §12) ---------------------------------------------------------------------------
+    def dataset_or_error(request: Request, name: str):
+        try:
+            return st(request).datasets.load(name)
+        except DatasetNotFound as e:
+            raise HTTPException(404, str(e)) from None
+        except DatasetError as e:
+            raise HTTPException(422, str(e)) from None
+
+    @app.get("/api/datasets")
+    async def list_datasets(request: Request) -> dict[str, Any]:
+        store = st(request).datasets
+        return {"datasets": [store.summary(n) for n in store.names()]}
+
+    @app.get("/api/datasets/{name}")
+    async def get_dataset(request: Request, name: str, preview: int = 20, ids: str | None = None) -> dict[str, Any]:
+        """The dataset with its first `preview` items, or the items named in `ids` (the report's disagreements: the
+        report holds no text, this local screen shows it). Texts are cut to 300 characters."""
+        ds = dataset_or_error(request, name)
+
+        def short(item) -> dict[str, Any]:
+            text = item.state if isinstance(item.state, str) else json.dumps(item.state, ensure_ascii=False)
+            return {"id": item.id, "state": text[:300] + ("…" if len(text) > 300 else ""), "labels": item.labels,
+                    "meta": item.meta}
+
+        out = {**st(request).datasets.summary(name),
+               "questions": {k: q.model_dump(mode="json", exclude_none=True) for k, q in ds.questions.items()},
+               "preview": [short(i) for i in ds.items[: min(max(preview, 0), 200)]]}
+        if ids is not None:
+            wanted = set(ids.split(",")[:500])
+            out["items"] = [short(i) for i in ds.items if i.id in wanted]
+        return out
+
+    @app.post("/api/datasets", status_code=201)
+    async def upload_dataset(request: Request, body: DatasetUpload) -> dict[str, Any]:
+        store = st(request).datasets
+        try:
+            spec = body.spec()
+            items = parse_items(body.content, body.format, store.questions_of(spec))
+            store.create(spec, items, overwrite=body.overwrite)
+        except DatasetExists as e:
+            raise HTTPException(409, str(e)) from None
+        except DatasetError as e:
+            raise HTTPException(400, str(e)) from None
+        except ValidationError as e:
+            raise HTTPException(400, e.errors()[0]["msg"]) from None
+        return store.summary(spec.name)
+
+    def dataset_run_parts(request: Request, name: str, run_in: DatasetRunIn):
+        state = st(request)
+        ds = dataset_or_error(request, name)
+        try:
+            engines = state.runner.engines_for(run_in.engines)
+        except RunRejected as e:
+            raise HTTPException(400, str(e)) from None
+        return ds, engines
+
+    @app.post("/api/datasets/{name}/estimate")
+    async def estimate_dataset(request: Request, name: str, run_in: DatasetRunIn) -> dict[str, Any]:
+        state = st(request)
+        ds, engines = dataset_run_parts(request, name, run_in)
+        return state.dataset_runner.estimate(ds, engines, state.dataset_runner.items(ds, run_in))
+
+    @app.post("/api/datasets/{name}/run")
+    async def run_dataset(request: Request, name: str, run_in: DatasetRunIn) -> StreamingResponse:
+        state = st(request)
+        ds, engines = dataset_run_parts(request, name, run_in)
+        return stream_events(request, lambda emit: state.dataset_runner.execute(ds, engines, run_in, emit),
+                             DATASET_TERMINAL, "run_error")
+
+    @app.get("/api/reports/{run_id}")
+    async def report(request: Request, run_id: str, format: str = "json", lang: str = "ru", target: float = 0.9):
+        record = st(request).store.get(run_id)
+        if record is None or record.get("kind") != "dataset":
+            raise HTTPException(404, "no dataset run with this id")
+        if not 0.5 <= target <= 0.99:
+            raise HTTPException(400, "target is between 0.5 and 0.99")
+        rep = build_report(record, target)
+        if format == "md":
+            name = f"{record['dataset']['name']}-{record['day']}-{run_id}.md"
+            return PlainTextResponse(render_markdown(rep, lang), media_type="text/markdown; charset=utf-8",
+                                     headers={"Content-Disposition": f'attachment; filename="{name}"'})
+        if format != "json":
+            raise HTTPException(400, "format is json or md")
+        return rep
+
     # --- presets -----------------------------------------------------------------------------------------------------
-    def preset_files() -> dict[str, Path]:
-        return {p.stem: p for p in sorted(PRESETS.glob("*.yaml"))}
-
-    def read_preset(path: Path) -> dict[str, Any]:
-        """A preset with its questions in the internal form (d1's `choice` + `multiple` becomes `multi`, §6.1); a
-        broken preset fails loudly here, not in the middle of a run."""
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        questions = {k: Question.model_validate(q).model_dump(mode="json", exclude_none=True)
-                     for k, q in (data.get("questions") or {}).items()}
-        return {**data, "id": path.stem, "questions": questions}
-
     @app.get("/api/presets")
     async def presets() -> dict[str, Any]:
-        out = []
-        for pid, path in preset_files().items():
-            try:
-                p = read_preset(path)
-                out.append({"id": pid, "title": p.get("title", pid), "questions": list(p.get("questions") or {}),
-                            "has_state": bool(p.get("state"))})
-            except (ValueError, yaml.YAMLError) as e:
-                out.append({"id": pid, "title": pid, "error": str(e)[:200]})
-        return {"presets": out}
+        return {"presets": list_presets()}
 
-    @app.get("/api/presets/{preset_id}")
+    @app.get("/api/presets/{preset_id:path}")
     async def preset(preset_id: str) -> dict[str, Any]:
-        path = preset_files().get(preset_id)
-        if path is None:
-            raise HTTPException(404, "preset not found")
         try:
-            return read_preset(path)
-        except (ValueError, yaml.YAMLError) as e:
-            raise HTTPException(422, f"broken preset: {str(e)[:300]}") from None
+            return load_preset(preset_id)
+        except PresetNotFound as e:
+            raise HTTPException(404, str(e)) from None
+        except PresetError as e:
+            raise HTTPException(422, str(e)) from None
 
     # --- web ---------------------------------------------------------------------------------------------------------
     @app.get("/", include_in_schema=False)

@@ -216,6 +216,45 @@ table.matrix td.cap { text-align: center; font-weight: 700; }
 .cap-unchecked, .cap-never { color: var(--text-dim); font-weight: 400 !important; }
 tr.catalog-row th b { font-weight: 500; }
 
+/* ── datasets ─────────────────────────────────────────────────── */
+.ds-grid { display: grid; grid-template-columns: minmax(300px, 4fr) minmax(420px, 8fr); gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .ds-grid { grid-template-columns: 1fr; } }
+.ds-list { max-height: 70vh; overflow-y: auto; }
+tr.pick { cursor: pointer; }
+tr.pick:hover { background: var(--surface-2); }
+tr.pick.on { background: var(--accent-soft); }
+.ds-import { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ds-import label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--text-dim); }
+.ds-engines { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 10px 0 4px; }
+.chip-check { font-size: 13px; white-space: nowrap; }
+.ds-limit { width: 80px; }
+.ds-run { margin: 2px 0; }
+.progress { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin: 6px 0; }
+.progress .track { position: relative; height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.progress .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 4px; }
+.ok { color: var(--ok); }
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 12px; margin: 10px 0; }
+.chart-card { border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.charts { display: grid; grid-template-columns: 300fr 170fr; gap: 6px; }
+svg.chart { width: 100%; height: auto; }
+svg.chart .axis { stroke: var(--border-strong); stroke-width: 1; }
+svg.chart .tick { fill: var(--text-dim); font-size: 9px; font-family: var(--mono); }
+svg.chart .line { fill: none; stroke-width: 1.8; }
+svg.chart .ln-agree { stroke: var(--accent); }
+svg.chart .ln-cover { stroke: var(--ok); }
+svg.chart .ln-acc { stroke: var(--warn); }
+svg.chart .mark { stroke-width: 1; stroke-dasharray: 3 3; }
+svg.chart .mk-agree { stroke: var(--accent); }
+svg.chart .mk-acc { stroke: var(--warn); }
+svg.chart .diag { stroke: var(--border-strong); stroke-dasharray: 3 3; fill: none; }
+svg.chart .dot { fill: var(--accent); fill-opacity: .7; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.lg::before { content: ''; display: inline-block; width: 14px; height: 3px; margin-right: 5px; vertical-align: middle; border-radius: 2px; }
+.lg-agree::before { background: var(--accent); }
+.lg-cover::before { background: var(--ok); }
+.lg-acc::before { background: var(--warn); }
+#tab-datasets h3 { font-size: 14px; margin: 16px 0 6px; }
+
 /* ── history ──────────────────────────────────────────────────── */
 .filters { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
 table.history td button { padding: 2px 8px; }

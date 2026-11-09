@@ -17,6 +17,7 @@ import contextlib
 import os
 import signal
 import sys
+import threading
 
 
 def main() -> None:
@@ -75,10 +76,15 @@ def main() -> None:
         def stop() -> None:
             local.begin_close()  # no new local calls; a cancelled request stops waiting for MLX
             if any(s.should_exit for s in servers):
-                # a second signal: force, and exit hard if something still holds on (a hung MLX call, review round 2)
+                # a second signal: force, and exit hard if something still holds on (a hung MLX call, review round 2).
+                # The timer is a daemon thread, not loop.call_later: the forced shutdown can close the loop within
+                # 3 s while a thread that is not a daemon (an asyncio.to_thread worker stuck in a tokenizer) keeps
+                # the interpreter alive — a loop timer never fired and the process hung (review P4)
                 for s in servers:
                     s.force_exit = True
-                loop.call_later(3, os._exit, 1)
+                hard = threading.Timer(3, os._exit, args=(1,))
+                hard.daemon = True
+                hard.start()
             for s in servers:
                 s.should_exit = True
 
