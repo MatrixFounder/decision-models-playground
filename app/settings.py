@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import ipaddress
+import math
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -10,6 +12,8 @@ from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[1]
+MIN_TOKEN = 32
+UI_HOSTS = ("127.0.0.1", "localhost")
 
 
 def is_loopback(host: str) -> bool:
@@ -47,11 +51,30 @@ class Settings(BaseSettings):
         return v if v.is_absolute() else (ROOT / v).resolve()
 
     @model_validator(mode="after")
-    def _ui_on_loopback(self):
-        # DESIGN §3, §18: the UI has no auth, so it never listens beyond loopback.
-        if not is_loopback(self.app_host):
-            raise ValueError(f"APP_HOST must be a loopback address, not {self.app_host!r} (DESIGN §18)")
+    def _hosts(self):
+        # DESIGN §3, §18: the UI has no auth, so it never listens beyond loopback. Only the two names the Host and
+        # Origin guards of app.main know: `::1` or 127.0.0.2 would pass a loopback test and then refuse every request.
+        if self.app_host not in UI_HOSTS:
+            raise ValueError(f"APP_HOST must be one of {', '.join(UI_HOSTS)}, not {self.app_host!r} (DESIGN §18)")
+        if not math.isfinite(self.daily_budget_usd) or self.daily_budget_usd < 0:
+            raise ValueError("DAILY_BUDGET_USD must be a finite number ≥ 0")
+        # DESIGN §9.2: the compat server leaves loopback only behind a token of at least 32 characters.
+        token = self.systemone_token.get_secret_value() if self.systemone_token else None
+        if token is not None and len(token) < MIN_TOKEN:
+            raise ValueError(f"SYSTEMONE_TOKEN must be at least {MIN_TOKEN} characters (DESIGN §9.2)")
+        if token is not None and (len(set(token)) < 10 or token != token.strip()):
+            # 32 x "a" is long and worthless; `openssl rand -hex 24` gives 48 characters of 16 kinds (review P2)
+            raise ValueError("SYSTEMONE_TOKEN is too uniform: use `openssl rand -hex 24`")
+        if ":" in self.compat_host:
+            # Host checks compare names; a bracketed IPv6 literal never matches them (review round 2)
+            raise ValueError("COMPAT_HOST is an IPv4 address or a host name (0.0.0.0 for every interface)")
+        if not is_loopback(self.compat_host) and token is None:
+            raise ValueError(f"COMPAT_HOST={self.compat_host} needs SYSTEMONE_TOKEN (DESIGN §9.2)")
         return self
+
+    @property
+    def compat_token(self) -> str | None:
+        return self.systemone_token.get_secret_value() if self.systemone_token else None
 
     @property
     def openrouter_key(self) -> str | None:
@@ -72,4 +95,8 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings()
+    s = Settings()
+    if s.hf_home:
+        # huggingface_hub reads HF_HOME from the environment when it is first imported; .env is not the environment
+        os.environ["HF_HOME"] = s.hf_home
+    return s

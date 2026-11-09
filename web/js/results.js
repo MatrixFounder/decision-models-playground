@@ -65,8 +65,10 @@ function cell(question, key, result) {
   const failure = result.question_failures?.[key];
   if (failure) return el('td', {}, el('span', { class: `badge ${failure}` }, t(failure)));
   const a = result.answers?.[key];
-  if (!a) return el('td', {}, el('span', { class: 'badge invalid_answer' }, result.request_failure || '—'));
-  return el('td', {}, answerCell(question, a));
+  if (a) return el('td', {}, answerCell(question, a));
+  // no answer and no own failure: the whole request failed, the question was never answered
+  return el('td', {}, el('span', { class: 'badge st-failed', title: result.detail || '' },
+    result.request_failure ? t('request_failed', { cls: result.request_failure }) : '—'));
 }
 
 function agreement(key, results) {

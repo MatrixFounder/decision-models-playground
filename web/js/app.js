@@ -3,6 +3,8 @@
 import * as api from './api.js';
 import { History } from './history.js';
 import { applyStatic, getLang, setLang, t } from './i18n.js';
+import { LocalModelsView } from './local.js';
+import { makeHandler } from './runview.js';
 import { el, fromRequest, QuestionEditor, toRequest } from './questions.js';
 import { fmtUsd, renderResults } from './results.js';
 
@@ -20,8 +22,9 @@ const ui = {
   tab: 'workbench',
 };
 
-const editor = new QuestionEditor($('#questions'), () => onDraftChange());
+const editor = new QuestionEditor($('#questions'), () => userEdited());
 const history = new History($('#history'), { onOpen: openRun, onRerun: rerunRun });
+const localView = new LocalModelsView($('#local'));
 
 // --- storage (a per-viewer convenience: the page works without it) -------------------------------------------------
 function readDraft() {
@@ -32,8 +35,24 @@ function saveDraft() {
     localStorage.setItem(DRAFT_KEY, JSON.stringify({
       state: $('#state').value, stateMode: ui.stateMode, questions: editor.list, qJson: ui.qJson,
       qJsonText: $('#questions-json').value, selected: [...ui.selected], title: $('#title').value, tags: $('#tags').value,
+      fromRun: ui.draftFromRun || null,
     }));
   } catch { /* storage blocked */ }
+}
+
+function applyDraft(draft) {
+  setState(draft.state);
+  setStateMode(draft.stateMode || 'text');
+  if (ui.qJson) setQJson(false);
+  editor.set(draft.questions || []);
+  $('#title').value = draft.title || '';
+  $('#tags').value = draft.tags || '';
+  if (draft.qJson) {
+    setQJson(true);
+    if (draft.qJsonText) $('#questions-json').value = draft.qJsonText;
+  }
+  ui.draftFromRun = draft.fromRun || null;
+  onDraftChange();
 }
 
 // --- the draft → POST body -----------------------------------------------------------------------------------------
@@ -94,7 +113,8 @@ function engineRow(e) {
     badges.push(el('span', { class: `chip ${z === false ? 'warn' : ''}` }, t(z === true ? 'zdr_yes' : z === false ? 'zdr_no' : 'zdr_unknown')));
     if (e.expiration_date) badges.push(el('span', { class: 'chip warn' }, `⌛ ${e.expiration_date}`));
   } else if (e.available) {
-    badges.push(el('span', { class: 'chip' }, t('free')));
+    badges.push(el('span', { class: 'chip' }, e.local ? t('local') : t('free')));
+    if (e.local && e.state) badges.push(el('span', { class: `chip lm-${e.state}` }, t(`state_${e.state}`)));
   }
   const box = el('input', { type: 'checkbox', checked: ui.selected.has(e.id), disabled: !e.available,
     onchange: (ev) => { if (ev.target.checked) ui.selected.add(e.id); else ui.selected.delete(e.id); syncZdrBox(); onDraftChange(); } });
@@ -148,54 +168,85 @@ function setRunning(on) {
   b.textContent = t(on ? 'running' : 'run');
 }
 function show() { renderResults($('#results'), ui.view); }
+const byIdLocal = (id) => ui.engines.find((e) => e.id === id)?.local;
 
-function onEvent(name, p) {
-  if (name === 'run_started') {
-    ui.view.runId = p.run_id;
-    $('#run-meta').textContent = `${p.run_id} · ${t('estimate')} ${fmtUsd(p.estimate_usd)}`;
-  } else if (name === 'engine_done' || name === 'engine_failed') {
-    ui.view.results[p.engine_id] = p.result;
-    show();
-  } else if (name === 'run_done') {
-    $('#run-meta').textContent = `${p.run_id} · ${t('cost')} ${fmtUsd(p.cost_usd)}`;
-    setRunning(false);
-    loadBudget();
-    updateEstimate();
-  } else if (name === 'budget_stop') {
-    $('#run-error').textContent = t('budget_stop', { est: fmtUsd(p.estimate_usd), rem: fmtUsd(p.remaining_usd) });
-    setRunning(false);
-  } else if (name === 'run_error' || name === 'fatal') {
-    $('#run-error').textContent = p.message;
-    setRunning(false);
-  }
+/** The event handler of one stream, bound to the view it fills: opening another run while this one streams must
+ * not mix the two tables (review P1). Running state and budget are global; cells and meta belong to the view. */
+function handlerFor(view) {
+  return makeHandler(view, {
+    isCurrent: (v) => ui.view === v,
+    render: () => show(),
+    setMeta: (kind, p) => {
+      $('#run-meta').textContent = kind === 'started'
+        ? `${p.run_id} · ${t('estimate')} ${fmtUsd(p.estimate_usd)}`
+        : `${p.run_id} · ${t('cost')} ${fmtUsd(p.cost_usd)}`;
+    },
+    finish: (name, p, v) => {
+      setRunning(false);
+      loadBudget();
+      if (name === 'run_done') {
+        updateEstimate();
+        if (v.engines.some((e) => byIdLocal(e.id))) loadEngines();  // a local model's state changed
+      } else if (name === 'budget_stop') {
+        $('#run-error').textContent = t('budget_stop', { est: fmtUsd(p.estimate_usd), rem: fmtUsd(p.remaining_usd) });
+      } else {
+        $('#run-error').textContent = p.message;
+      }
+    },
+  });
 }
 
 function startView(request, engineIds) {
   const byId = Object.fromEntries(ui.engines.map((e) => [e.id, e]));
   ui.view = { request, engines: engineIds.map((id) => ({ id, model: byId[id]?.model })), results: {} };
   show();
+  return ui.view;
+}
+
+/** Consent to skip ZDR is per run (§18): read it for this run, then clear the box. */
+function takeNoZdrConsent() {
+  const box = $('#allow-no-zdr');
+  const given = box.checked;
+  box.checked = false;
+  return given;
 }
 
 function run() {
   if (ui.running) return;
   let body;
   try { body = runBody(); } catch (e) { $('#run-error').textContent = e.message; return; }
+  body.options.allow_no_zdr = takeNoZdrConsent();
   $('#run-error').textContent = '';
   setRunning(true);
-  startView(body.request, body.engines);
-  api.runCompare(body, onEvent);
+  api.runCompare(body, handlerFor(startView(body.request, body.engines)));
 }
 
+/** Rerun from History: the same inputs and engines, after the user sees the estimate. Consent to skip ZDR is asked
+ * here, for this rerun only — never read from the Workbench box, which belongs to another selection (review round 2). */
 async function rerunRun(id) {
   if (ui.running) return;
-  const record = await api.getRun(id);
+  let record;
+  let est;
+  try {
+    record = await api.getRun(id);
+    est = await api.estimate({ request: record.request, engines: record.engines.map((e) => e.engine_id) });
+  } catch (e) {
+    $('#run-error').textContent = e.message;
+    return;
+  }
+  if (!window.confirm(t('rerun_confirm', { est: fmtUsd(est.total_usd), rem: fmtUsd(est.budget.remaining_usd) }))) return;
+  const noZdr = record.engines.filter((e) => e.zdr === false).map((e) => e.engine_id);
+  const allow = noZdr.length ? window.confirm(t('rerun_no_zdr', { engines: noZdr.join(', ') })) : false;
   openRun(record);
+  $('#run-error').textContent = '';
   setRunning(true);
-  startView(record.request, record.engines.map((e) => e.engine_id));
-  api.rerun(id, onEvent);
+  const view = startView(record.request, record.engines.map((e) => e.engine_id));
+  api.rerun(id, { allow_no_zdr: allow }, handlerFor(view));
 }
 
+/** Show a saved run in the Workbench. The user's draft is kept aside first and can be restored (review P1). */
 function openRun(record) {
+  stashDraft();
   setState(record.request.state);
   setQuestions(record.request.questions);
   $('#title').value = record.title || '';
@@ -208,7 +259,35 @@ function openRun(record) {
   show();
   $('#run-meta').textContent = `${t('loaded_run', { id: record.id })} · ${t('cost')} ${fmtUsd(record.cost_usd)}`;
   switchTab('workbench');
+  ui.draftFromRun = record.id;
   onDraftChange();
+}
+
+/** The user changed the draft: from now on it is theirs, not an opened run's. */
+function userEdited() {
+  ui.draftFromRun = null;
+  onDraftChange();
+}
+
+const BACKUP_KEY = 'draft.backup.v1';
+function stashDraft() {
+  try {
+    const current = localStorage.getItem(DRAFT_KEY);
+    // a draft that an opened run wrote is not the user's: a second Open must not replace the real backup
+    if (current && !JSON.parse(current).fromRun) localStorage.setItem(BACKUP_KEY, current);
+  } catch { /* storage blocked or unreadable: nothing to restore later */ }
+  syncRestore();
+}
+function syncRestore() {
+  let has = false;
+  try { has = !!localStorage.getItem(BACKUP_KEY); } catch { /* storage blocked */ }
+  $('#restore-draft').hidden = !has;
+}
+function restoreDraft() {
+  let backup = null;
+  try { backup = JSON.parse(localStorage.getItem(BACKUP_KEY) || 'null'); localStorage.removeItem(BACKUP_KEY); } catch { /* ignore */ }
+  if (backup) applyDraft(backup);
+  syncRestore();
 }
 
 // --- state and questions -------------------------------------------------------------------------------------------
@@ -228,7 +307,10 @@ function setState(state) {
 function setQJson(on) {
   if (on === ui.qJson) return;
   if (on) {
-    $('#questions-json').value = JSON.stringify(toRequest(editor.list), null, 2);
+    try { $('#questions-json').value = JSON.stringify(toRequest(editor.list), null, 2); } catch (e) {
+      $('#run-error').textContent = e.message;
+      return;
+    }
   } else {
     try { editor.set(fromRequest(JSON.parse($('#questions-json').value || '{}'))); } catch (e) {
       $('#run-error').textContent = t('json_invalid', { msg: e.message });
@@ -258,7 +340,7 @@ async function applyPreset(id) {
   const p = await api.getPreset(id);
   if (p.state != null) setState(p.state);
   setQuestions(p.questions || {});
-  onDraftChange();
+  userEdited();
 }
 
 // --- tabs and language ---------------------------------------------------------------------------------------------
@@ -267,7 +349,10 @@ function switchTab(tab) {
   document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   $('#tab-workbench').hidden = tab !== 'workbench';
   $('#tab-history').hidden = tab !== 'history';
+  $('#tab-local').hidden = tab !== 'local';
   if (tab === 'history') history.load();
+  if (tab === 'local') localView.load();
+  if (tab === 'workbench') loadEngines().catch(() => {});
 }
 function relabel() {
   applyStatic();
@@ -279,6 +364,7 @@ function relabel() {
   loadBudget();
   loadPresets();
   if (ui.tab === 'history') history.render();
+  if (ui.tab === 'local') localView.render();
   onDraftChange();
 }
 
@@ -288,14 +374,16 @@ async function start() {
   $('#lang').addEventListener('click', () => { setLang(getLang() === 'ru' ? 'en' : 'ru'); relabel(); });
   document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
   document.querySelectorAll('[data-state-mode]').forEach((b) => b.addEventListener('click', () => { setStateMode(b.dataset.stateMode); onDraftChange(); }));
-  $('#state').addEventListener('input', onDraftChange);
-  $('#title').addEventListener('input', saveDraft);
-  $('#tags').addEventListener('input', saveDraft);
+  $('#state').addEventListener('input', userEdited);
+  $('#title').addEventListener('input', userEdited);
+  $('#tags').addEventListener('input', userEdited);
   $('#allow-no-zdr').addEventListener('change', onDraftChange);
-  $('#questions-json').addEventListener('input', onDraftChange);
+  $('#questions-json').addEventListener('input', userEdited);
   $('#q-add').addEventListener('click', () => editor.add());
   $('#q-json').addEventListener('click', () => setQJson(!ui.qJson));
   $('#run').addEventListener('click', run);
+  $('#restore-draft').addEventListener('click', restoreDraft);
+  syncRestore();
   $('#preset').addEventListener('change', async (e) => { if (e.target.value) await applyPreset(e.target.value); e.target.value = ''; });
   $('#state-file').addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -316,15 +404,7 @@ async function start() {
   await Promise.all([loadEngines(), loadBudget()]);
   const presets = await loadPresets();
   if (draft) {
-    setState(draft.state);
-    setStateMode(draft.stateMode || 'text');
-    editor.set(draft.questions || []);
-    $('#title').value = draft.title || '';
-    $('#tags').value = draft.tags || '';
-    if (draft.qJson) {
-      setQJson(true);
-      if (draft.qJsonText) $('#questions-json').value = draft.qJsonText;
-    }
+    applyDraft(draft);
   } else if (presets.some((p) => p.id === DEFAULT_PRESET)) {
     await applyPreset(DEFAULT_PRESET);
   }
@@ -341,7 +421,7 @@ async function start() {
     switchTab('history');
     await history.load();
     await history.compare();
-  } else if (params.get('tab') === 'history') switchTab('history');
+  } else if (['history', 'local'].includes(params.get('tab'))) switchTab(params.get('tab'));
 }
 
 start();

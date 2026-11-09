@@ -52,8 +52,16 @@ def _get(obj: dict, path: str) -> Any:
     return obj
 
 
+def _isfinite(x: Any) -> bool:
+    """math.isfinite without the OverflowError a 400-digit int raises (review round 2)."""
+    try:
+        return math.isfinite(x)
+    except (OverflowError, TypeError):
+        return False
+
+
 def _prob(x: Any) -> float | None:
-    if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x):
+    if isinstance(x, bool) or not isinstance(x, (int, float)) or not _isfinite(x):
         return None
     if -1e-9 <= x <= 1 + 1e-9:
         return min(1.0, max(0.0, float(x)))
@@ -70,8 +78,32 @@ def _distribution(q: Question, raw: Any) -> dict[str, float] | None:
     return {k: probs[k] for k in q.options()}  # the request's order
 
 
+def _number(x: Any) -> float | None:
+    if isinstance(x, bool) or not isinstance(x, (int, float)) or not _isfinite(x):
+        return None
+    return float(x)
+
+
+def _span(x: Any) -> tuple[int, int] | None | str:
+    """A [start, end) character span, None when absent, "bad" when malformed."""
+    if x is None:
+        return None
+    if (isinstance(x, list) and len(x) == 2 and all(isinstance(i, int) and not isinstance(i, bool) for i in x)
+            and 0 <= x[0] <= x[1]):
+        return (x[0], x[1])
+    return "bad"
+
+
 def normalize_answer(q: Question, raw: Any, names: dict[str, str] = ANSWER_NAMES["system_one"]) -> Answer | str:
-    """One provider answer as an `Answer`, or the question failure class (§6.2, §6.3)."""
+    """One provider answer as an `Answer`, or the question failure class (§6.2, §6.3). Never raises: an alpha API
+    (RQ-4) that sends an odd field costs that question, not the whole engine result (review P1)."""
+    try:
+        return _normalize(q, raw, names)
+    except Exception:  # any odd value is this question's problem, never the engine's
+        return "invalid_answer"
+
+
+def _normalize(q: Question, raw: Any, names: dict[str, str]) -> Answer | str:
     if not isinstance(raw, dict):
         return "invalid_answer"
     if raw.get("type") == "refusal":
@@ -92,7 +124,7 @@ def normalize_answer(q: Question, raw: Any, names: dict[str, str] = ANSWER_NAMES
             return "invalid_answer"
         if q.type == "choice":
             picked = _get(raw, names["choice"])
-            if picked is not None and picked not in probs:
+            if picked is not None and (not isinstance(picked, str) or picked not in probs):
                 return "invalid_answer"
         top = max(probs, key=probs.get)  # ties: the first in the request's order
         expected = sum(int(k) * p for k, p in probs.items()) if q.type == "score" else None
@@ -107,29 +139,55 @@ def normalize_answer(q: Question, raw: Any, names: dict[str, str] = ANSWER_NAMES
             return "invalid_answer"
         top = max(probs, key=probs.get)
         return Answer(type="multi", probabilities=probs, top=top, top_p=probs[top])
-    # text / number / date: typed extraction of the local d1 models (§7.3)
+    # text / number / date: typed extraction of the local d1 models (§7.3); a malformed field is invalid_answer
     found = _prob(raw.get("found"))
+    if raw.get("found") is not None and found is None:
+        return "invalid_answer"
+    span = _span(raw.get("span"))
     interval = raw.get("interval")
-    span = raw.get("span")
-    extract = ExtractResult(
-        value=raw.get(q.type),
-        text=raw.get("text") if isinstance(raw.get("text"), str) else None,
-        span=tuple(span) if isinstance(span, list) and len(span) == 2 else None,
-        found=found,
-        interval=tuple(interval) if isinstance(interval, list) and len(interval) == 2 else None,
-        unit=raw.get("unit"),
-    )
+    if interval is not None:
+        bounds = [_number(x) for x in interval] if isinstance(interval, list) and len(interval) == 2 else [None]
+        if None in bounds:
+            return "invalid_answer"
+        interval = tuple(bounds)
+    value, text, unit = raw.get(q.type), raw.get("text"), raw.get("unit")
+    if q.type == "number" and value is not None and _number(value) is None:
+        return "invalid_answer"
+    if q.type in ("text", "date") and value is not None and not isinstance(value, str):
+        return "invalid_answer"
+    if span == "bad" or text is not None and not isinstance(text, str) or unit is not None and not isinstance(unit, str):
+        return "invalid_answer"
+    extract = ExtractResult(value=value, text=text, span=span, found=found, interval=interval, unit=unit)
     probs = {"found": found} if found is not None else {}
     return Answer(type=q.type, probabilities=probs, top_p=found, extract=extract)
 
 
+def _finite(data: Any) -> Any:
+    """NaN and ±inf become None: they are not JSON, and a record or an SSE frame must stay parseable."""
+    if isinstance(data, float) and not math.isfinite(data):
+        return None
+    if isinstance(data, dict):
+        return {k: _finite(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [_finite(v) for v in data]
+    return data
+
+
 def truncate_raw(data: Any) -> dict | None:
+    """The provider's answer as stored in a record: finite numbers only, at most RAW_LIMIT bytes once serialized."""
     if data is None:
         return None
+    data = _finite(data)
     text = json.dumps(data, ensure_ascii=False)
     if len(text.encode()) <= RAW_LIMIT:
         return data if isinstance(data, dict) else {"_value": data}
-    return {"_truncated": True, "_text": text.encode()[:RAW_LIMIT].decode(errors="ignore")}
+    cut = text.encode()[: RAW_LIMIT - 64].decode(errors="ignore")
+    while True:  # escaping inside "_text" grows the text: shrink until the serialized result fits
+        out = {"_truncated": True, "_text": cut}
+        over = len(json.dumps(out, ensure_ascii=False).encode()) - RAW_LIMIT
+        if over <= 0:
+            return out
+        cut = cut[: max(0, len(cut) - over - 16)]
 
 
 class BaseEngine:
@@ -192,19 +250,26 @@ class BaseEngine:
             remaining = deadline - loop.time()
             if remaining <= 0:
                 raise EngineFailure("timed_out", "the deadline passed before the call")
+            retry = attempt == 1 and deadline - loop.time() > self.retry_delay_s
+            tried = "after a retry" if attempt == 2 else "no time left to retry"
             try:
                 r = await self.client.post(url, json=body, headers=headers, timeout=min(self.spec.timeout_s, remaining))
+            except (httpx.ConnectTimeout, httpx.PoolTimeout) as e:  # no connection yet: a network error (§7.1)
+                if retry:
+                    await asyncio.sleep(self.retry_delay_s)
+                    continue
+                raise EngineFailure("unreachable", f"{type(e).__name__}, {tried}") from None
             except httpx.TimeoutException:
                 raise EngineFailure("timed_out", f"no answer in {min(self.spec.timeout_s, remaining):.0f} s") from None
             except httpx.TransportError as e:
-                if attempt == 1 and deadline - loop.time() > self.retry_delay_s:
+                if retry:
                     await asyncio.sleep(self.retry_delay_s)
                     continue
-                raise EngineFailure("unreachable", type(e).__name__) from None
+                raise EngineFailure("unreachable", f"{type(e).__name__}, {tried}") from None
             if r.status_code >= 500:
-                if attempt == 1 and deadline - loop.time() > self.retry_delay_s:
+                if retry:
                     await asyncio.sleep(self.retry_delay_s)
                     continue
-                raise EngineFailure("provider_error", f"HTTP {r.status_code} after a retry", r.status_code)
+                raise EngineFailure("provider_error", f"HTTP {r.status_code}, {tried}", r.status_code)
             return r
         raise AssertionError("unreachable")

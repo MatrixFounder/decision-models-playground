@@ -16,10 +16,18 @@ class Budget:
         self.limit = limit_usd
         self.store = store
         self.reserved = 0.0
+        self.unsaved: dict[str, float] = {}  # day → cost of runs whose record could not be written
         self._lock = threading.Lock()
 
     def spent(self) -> float:
-        return self.store.spent_on(local_day())
+        day = local_day()
+        return self.store.spent_on(day) + self.unsaved.get(day, 0.0)
+
+    def charge_unsaved(self, amount: float) -> None:
+        """Money spent by a run that could not be saved (disk full, permissions) still counts against the limit."""
+        with self._lock:
+            day = local_day()
+            self.unsaved[day] = self.unsaved.get(day, 0.0) + max(0.0, amount)
 
     def status(self) -> dict:
         spent = self.spent()

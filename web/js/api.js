@@ -1,5 +1,7 @@
 // JSON endpoints plus an SSE reader over fetch streams (POST bodies cannot ride EventSource).
 
+import { t } from './i18n.js';
+
 export class ApiError extends Error {}
 
 function detailOf(body, fallback) {
@@ -37,10 +39,21 @@ export const listRuns = (params = {}) => {
   return json(`/api/runs?${q}`);
 };
 export const getRun = (id) => json(`/api/runs/${encodeURIComponent(id)}`);
+export const getLocalModels = () => json('/api/local/models');
+export const unloadLocal = (id) => post(`/api/local/models/${encodeURIComponent(id)}/unload`);
 
-/** POST and dispatch SSE frames to onEvent(name, payload). Returns an AbortController. */
+export const TERMINAL = ['run_done', 'budget_stop', 'run_error'];
+
+/** POST and dispatch SSE frames to onEvent(name, payload). Every stream ends with exactly one terminal event for
+ * the caller: the server's, or `fatal` when the stream breaks or ends without one (review P1). */
 export function streamPost(url, body, onEvent) {
   const controller = new AbortController();
+  let ended = false;
+  const emit = (name, payload) => {
+    if (ended) return;
+    if (TERMINAL.includes(name) || name === 'fatal') ended = true;
+    onEvent(name, payload);
+  };
   (async () => {
     try {
       const response = await fetch(url, {
@@ -52,7 +65,7 @@ export function streamPost(url, body, onEvent) {
       if (!response.ok) {
         let b = null;
         try { b = await response.json(); } catch { /* ignore */ }
-        onEvent('fatal', { message: detailOf(b, `${response.status} ${response.statusText}`) });
+        emit('fatal', { message: detailOf(b, `${response.status} ${response.statusText}`) });
         return;
       }
       const reader = response.body.getReader();
@@ -60,7 +73,10 @@ export function streamPost(url, body, onEvent) {
       let buffer = '';
       for (;;) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          emit('fatal', { message: t('stream_cut') });  // a no-op when a terminal event already came
+          break;
+        }
         buffer += decoder.decode(value, { stream: true });
         let cut;
         while ((cut = buffer.indexOf('\n\n')) !== -1) {
@@ -73,15 +89,18 @@ export function streamPost(url, body, onEvent) {
             else if (line.startsWith('data:')) data.push(line.slice(5).trim());
           }
           if (!data.length) continue;
-          try { onEvent(name, JSON.parse(data.join('\n'))); } catch { /* malformed frame */ }
+          let payload;
+          try { payload = JSON.parse(data.join('\n')); } catch { continue; /* malformed frame */ }
+          emit(name, payload);
         }
       }
     } catch (error) {
-      if (error.name !== 'AbortError') onEvent('fatal', { message: String(error) });
+      if (error.name !== 'AbortError') emit('fatal', { message: String(error) });
     }
   })();
   return controller;
 }
 
 export const runCompare = (body, onEvent) => streamPost('/api/runs', body, onEvent);
-export const rerun = (id, onEvent) => streamPost(`/api/runs/${encodeURIComponent(id)}/rerun`, {}, onEvent);
+/** Rerun: the same inputs and engines; consent to skip ZDR is given again for this run, never inherited (§18). */
+export const rerun = (id, options, onEvent) => streamPost(`/api/runs/${encodeURIComponent(id)}/rerun`, options, onEvent);

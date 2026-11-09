@@ -58,12 +58,16 @@ engines:
 local:
   max_loaded_models: 1                # Mac 16–24 ГБ: одна модель в памяти
   idle_unload_s: 600
+  max_waiting: 8                      # больше ждущих — rate_limited в UI, 429 busy в compat
 
 compat:
   default_model: mlx-d1-2b            # алиас из engines для POST /v1/systemone без поля model
   max_questions: 64
   max_body_mb: 6
+  max_images: 4                       # PNG, JPEG или WebP; whip-insight картинок не шлёт
+  max_image_pixels: 16000000          # d1 всё равно сжимает до 1.6 Мп
   extensions_header: X-Playground-Extensions
+  allowed_hosts: ["127.0.0.1", "localhost", "*.local"]   # Host для compat; IP Mac добавить сюда, если звонят по IP
 
 audio:
   max_seconds: 30                     # длинная речь теряет точность (карточка d1-Omni)

@@ -7,13 +7,39 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-KEY_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+KEY_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")  # always used with fullmatch: `$` alone lets "key\n" through
+
+
+def valid_key(k: Any) -> bool:
+    return isinstance(k, str) and KEY_RE.fullmatch(k) is not None
 QuestionType = Literal["noul", "choice", "score", "multi", "text", "number", "date"]
 SYSTEM_ONE_TYPES = ("noul", "choice", "score")
 EXTENSION_TYPES = ("multi", "text", "number", "date")
 MAX_CHOICE_OPTIONS = 255
 MAX_SCORE_LEVELS = 10
 MAX_QUESTIONS = 64
+
+MAX_STATE_DEPTH = 32  # nesting of a JSON state; indent=2 rendering grows with the square of the depth
+
+
+def json_depth(value: Any, limit: int = MAX_STATE_DEPTH) -> int:
+    """Nesting depth of a JSON value (containers only), walked without recursion; stops counting past `limit`."""
+    deepest, stack = 0, [(value, 1)]
+    while stack:
+        v, d = stack.pop()
+        if isinstance(v, dict):
+            items = v.values()
+        elif isinstance(v, list):
+            items = v
+        else:
+            continue
+        deepest = max(deepest, d)
+        if deepest > limit:
+            return deepest
+        stack.extend((x, d + 1) for x in items)
+    return deepest
+
+
 
 QuestionFailure = Literal["unsupported", "refused", "invalid_answer"]
 RequestFailure = Literal["unreachable", "timed_out", "rate_limited", "refused", "too_long", "provider_error", "budget"]
@@ -36,13 +62,16 @@ class Question(BaseModel):
         # d1's own form, {"type": "choice", "multiple": true}, is the internal `multi` (DESIGN §6.1)
         if isinstance(data, dict) and "multiple" in data:
             data = dict(data)
-            if data.pop("multiple") and data.get("type") == "choice":
+            multiple = data.pop("multiple")
+            if not isinstance(multiple, bool):  # "false" is truthy: only a real boolean decides (review P2)
+                raise ValueError("multiple is true or false")
+            if multiple and data.get("type") == "choice":
                 data["type"] = "multi"
         return data
 
     @model_validator(mode="after")
     def _check(self) -> Question:
-        if isinstance(self.instructions, str) and not self.instructions.strip():
+        if not self.instructions or isinstance(self.instructions, str) and not self.instructions.strip():
             raise ValueError("instructions must not be empty")
         c = self.criteria
         if self.type == "noul":
@@ -51,7 +80,7 @@ class Question(BaseModel):
         elif self.type in ("choice", "multi"):
             if not isinstance(c, dict) or not 2 <= len(c) <= MAX_CHOICE_OPTIONS:
                 raise ValueError(f"{self.type} criteria maps 2 to {MAX_CHOICE_OPTIONS} option ids to descriptions")
-            bad = [k for k in c if not KEY_RE.match(k)]
+            bad = [k for k in c if not valid_key(k)]
             if bad:
                 raise ValueError(f"option ids must match {KEY_RE.pattern}: {bad[:5]}")
         elif self.type == "score":
@@ -106,7 +135,7 @@ class DecisionRequest(BaseModel):
     def _keys(cls, v: dict[str, Question]) -> dict[str, Question]:
         if not 1 <= len(v) <= MAX_QUESTIONS:
             raise ValueError(f"1 to {MAX_QUESTIONS} questions")
-        bad = [k for k in v if not KEY_RE.match(k)]
+        bad = [k for k in v if not valid_key(k)]
         if bad:
             raise ValueError(f"question keys must match {KEY_RE.pattern}: {bad[:5]}")
         return v
@@ -115,6 +144,9 @@ class DecisionRequest(BaseModel):
     def _state_or_media(self) -> DecisionRequest:
         if self.state is None and not self.media:
             raise ValueError("state is required unless media carries the whole state")
+        if not isinstance(self.state, str) and json_depth(self.state) > MAX_STATE_DEPTH:
+            # mlx-vlm writes a JSON state with indent=2: the text grows with the square of the depth (review round 2)
+            raise ValueError(f"state is nested deeper than {MAX_STATE_DEPTH} levels")
         return self
 
     def state_text(self) -> str:
@@ -168,14 +200,18 @@ class EngineResult(BaseModel):
     latency_ms: int = 0
     usage: Usage = Field(default_factory=Usage)
     raw: dict | None = None
+    timings: dict[str, int] | None = None  # local engines: queue_ms, load_ms, call_ms (latency_ms is the call)
 
     @classmethod
     def build(cls, engine_id: str, keys: list[str], answers: dict[str, Answer], failures: dict[str, str], **kw) -> EngineResult:
-        """Every requested key lands in exactly one of answers and question_failures (DESIGN §6.2)."""
+        """Every requested key lands in exactly one of answers and question_failures (DESIGN §6.2) — unless the
+        request itself failed: then the keys without an answer or an own failure are covered by `request_failure`,
+        not stamped `invalid_answer` (there was no answer to be invalid, review P1)."""
         failures = dict(failures)
-        for k in keys:
-            if k not in answers and k not in failures:
-                failures[k] = "invalid_answer"
+        if not kw.get("request_failure"):
+            for k in keys:
+                if k not in answers and k not in failures:
+                    failures[k] = "invalid_answer"
         answers = {k: a for k, a in answers.items() if k in keys and k not in failures}
         if kw.get("request_failure") or not answers:
             status = "failed"
@@ -205,7 +241,7 @@ class CapabilityProfile(BaseModel):
 
 
 class EngineSpec(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")  # a typo in config.yaml (`timeout: 60`) fails loudly
 
     id: str
     kind: str
@@ -229,11 +265,29 @@ class BudgetConfig(BaseModel):
     fallback_price_per_mtok: float = 0.2
 
 
+class LocalConfig(BaseModel):
+    max_loaded_models: Literal[1] = 1  # DESIGN §8: a 16-24 GB Mac holds one model
+    idle_unload_s: float = 600
+    max_waiting: int = 8  # callers queued for the model beyond this get Busy (compat 429 busy, UI rate_limited)
+
+
+class CompatConfig(BaseModel):
+    default_model: str | None = None  # an engine id of kind mlx_local
+    max_questions: int = MAX_QUESTIONS
+    max_body_mb: float = 6
+    max_images: int = 4  # whip-insight sends none; d1 caps each picture at 1.6 MP anyway
+    max_image_pixels: int = 16_000_000  # a 12 MP phone photo passes; a decompression bomb does not
+    extensions_header: str = "X-Playground-Extensions"
+    allowed_hosts: list[str] = Field(default_factory=lambda: ["127.0.0.1", "localhost", "*.local"])
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     engines: list[EngineSpec] = Field(default_factory=list)
     budget: BudgetConfig = Field(default_factory=BudgetConfig)
+    local: LocalConfig = Field(default_factory=LocalConfig)
+    compat: CompatConfig = Field(default_factory=CompatConfig)
 
 
 class RunOptions(BaseModel):

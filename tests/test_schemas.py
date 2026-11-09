@@ -41,6 +41,8 @@ def test_valid_questions(kw):
     {"type": "number", "step": 1},
     {"type": "box"},
     {"type": "noul", "instructions": "   "},
+    {"type": "noul", "instructions": {}},
+    {"type": "noul", "instructions": []},
 ])
 def test_invalid_questions(kw):
     with pytest.raises(ValidationError):
@@ -61,3 +63,23 @@ def test_result_partitions_every_key():
     r = EngineResult.build("e", ["a", "b", "c"], {}, {"a": "unsupported"})
     assert r.question_failures == {"a": "unsupported", "b": "invalid_answer", "c": "invalid_answer"}
     assert r.status == "failed"
+
+
+def test_request_failure_covers_keys_without_answers():
+    r = EngineResult.build("e", ["a", "b"], {}, {"a": "unsupported"}, request_failure="timed_out")
+    assert r.question_failures == {"a": "unsupported"} and r.status == "failed"
+
+
+def test_engine_config_typo_fails_loudly():
+    from app.schemas import EngineSpec
+
+    with pytest.raises(ValidationError):
+        EngineSpec.model_validate({"id": "x", "kind": "openrouter_decisions", "timeout": 60})
+
+
+def test_example_config_loads_with_the_strict_spec():
+    from app.registry import load_config
+    from app.settings import ROOT
+
+    config, source = load_config(ROOT / "does-not-exist.yaml")
+    assert source.name == "config.example.yaml" and len(config.engines) >= 5

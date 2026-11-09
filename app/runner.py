@@ -88,7 +88,7 @@ class Runner:
         return EngineResult.build(
             engine.spec.id, all_keys, res.answers, {**refused, **res.question_failures},
             request_failure=res.request_failure, detail=res.detail, snapshot=res.snapshot,
-            latency_ms=res.latency_ms, usage=res.usage, raw=res.raw,
+            latency_ms=res.latency_ms, usage=res.usage, raw=res.raw, timings=res.timings,
         )
 
     async def execute(self, run_in: RunIn, emit: Emit, kind: str = "compare") -> dict[str, Any] | None:
@@ -135,9 +135,14 @@ class Runner:
                 "versions": {"app": __version__, "mlx_vlm": _mlx_vlm_version(),
                              "models": {r.engine_id: r.snapshot for r in results if r.snapshot}},
             }
-            self.store.save(record)
-            self.budget.release(reserved)  # the saved record now carries the real cost
-            reserved = 0.0
+            try:
+                self.store.save(record)
+            except Exception:
+                self.budget.charge_unsaved(record["cost_usd"])  # the providers billed it either way
+                raise
+            finally:
+                self.budget.release(reserved)  # the saved record (or the unsaved charge) now carries the real cost
+                reserved = 0.0
             await emit("run_done", {"run_id": run_id, "cost_usd": record["cost_usd"], "day": record["day"],
                                     "budget": self.budget.status()})
             return record
@@ -151,4 +156,5 @@ class Runner:
 
 
 def sse(event: str, payload: dict[str, Any]) -> str:
-    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+    # allow_nan=False: a bare NaN is not JSON and the browser would drop the frame (review P1)
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False, allow_nan=False)}\n\n"

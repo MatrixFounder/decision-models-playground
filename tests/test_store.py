@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import time
+
+import pytest
 
 from app.store import Store, new_id, valid_id
 
@@ -28,3 +31,71 @@ def test_save_list_get_and_torn_index_line(tmp_path):
     assert store.list(engine="e2") == [] and store.list(tag="a")
     assert (tmp_path / "runs" / "2026-11-09" / f"{rec['id']}.json").is_file()
     assert store.get("not-an-id") is None
+
+
+def record(day="2026-11-09", cost=0.1):
+    return {"id": new_id(), "created_at": f"{day}T12:00:00Z", "day": day, "kind": "compare", "tags": [],
+            "request": {"questions": {"q": {}}}, "engines": [], "results": [], "cost_usd": cost}
+
+
+def test_a_torn_line_does_not_swallow_the_next_run(tmp_path):
+    store = Store(tmp_path / "runs")
+    store.save(record())
+    with store.index.open("a") as f:
+        f.write('{"id": "torn')  # a crash mid-append, no newline
+    nxt = record(cost=0.25)
+    store.save(nxt)
+    assert nxt["id"] in [r["id"] for r in store.list()]
+    assert store.get(nxt["id"]) is not None
+    assert store.spent_on("2026-11-09") == pytest.approx(0.35)
+
+
+def test_reconcile_indexes_records_without_a_line(tmp_path):
+    store = Store(tmp_path / "runs")
+    rec = record(cost=0.5)
+    path = tmp_path / "runs" / rec["day"] / f"{rec['id']}.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(rec))  # written, then the process died before the index line
+    assert store.get(rec["id"]) is None
+    assert store.reconcile() == 1 and store.reconcile() == 0
+    assert store.get(rec["id"])["cost_usd"] == 0.5 and store.spent_on(rec["day"]) == 0.5
+
+
+@pytest.mark.parametrize("bad", ["../../etc/passwd", "..", "01JC000000000000000000000/", "", "x" * 26])
+def test_get_refuses_anything_but_an_indexed_id(tmp_path, bad, monkeypatch):
+    store = Store(tmp_path / "runs")
+    store.save(record())
+    monkeypatch.setattr(store, "rows", lambda: pytest.fail("a non-ULID reached the index"))
+    assert store.get(bad) is None
+
+
+def test_the_budget_day_is_the_local_day(monkeypatch):
+    from app.store import local_day
+
+    monkeypatch.setenv("TZ", "Europe/Moscow")
+    time.tzset()
+    try:
+        # 2026-11-09 22:30 UTC is already 2026-11-10 in Moscow (UTC+3)
+        assert local_day(1794263400) == "2026-11-10"
+    finally:
+        monkeypatch.delenv("TZ")
+        time.tzset()
+
+
+def test_rows_cache_follows_the_file(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    store = Store(tmp_path / "runs")
+    store.save(record())
+    reads = []
+    real = Path.read_text
+
+    def counted(self, *a, **k):
+        if self == store.index:
+            reads.append(1)
+        return real(self, *a, **k)
+
+    monkeypatch.setattr(Path, "read_text", counted)
+    assert len(store.rows()) == 1 and len(store.rows()) == 1 and len(reads) == 1  # read once, then cached
+    store.save(record())
+    assert len(store.rows()) == 2 and len(reads) == 2  # the file changed: read again

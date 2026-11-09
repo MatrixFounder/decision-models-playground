@@ -6,6 +6,43 @@ import { el } from './questions.js';
 import { fmtP, fmtUsd } from './results.js';
 
 const when = (iso) => new Date(iso).toLocaleString();
+const own = (obj, key) => (obj && Object.hasOwn(obj, key) ? obj[key] : undefined);
+
+/** One cell of the comparison: the probability of run A's top option in both runs, or, for an extraction, the two
+ * values. Pure (node --test): `null` when either run has no answer. */
+export function compareCell(x, y) {
+  if (!x || !y) return null;
+  if (['text', 'number', 'date'].includes(x.type)) {
+    const va = x.extract?.value ?? x.extract?.text ?? '∅';
+    const vb = y.extract?.value ?? y.extract?.text ?? '∅';
+    return { text: `${va} → ${vb}`, sub: '', changed: String(va) !== String(vb) };
+  }
+  const pa = own(x.probabilities, x.top) ?? 0;
+  const pb = own(y.probabilities, x.top) ?? 0;
+  const d = pb - pa;
+  const delta = Math.abs(d) < 0.0005 ? '±0.000' : `${d > 0 ? '+' : ''}${d.toFixed(3)}`;
+  return {
+    text: `${x.top}: ${fmtP(pa)} → ${fmtP(pb)}`,
+    sub: `${t('delta')} ${delta}${x.top !== y.top ? ` · B: ${y.top}` : ''}`,
+    changed: Math.abs(d) >= 0.05 || x.top !== y.top,
+  };
+}
+
+/** Two runs side by side, the older (by ULID, millisecond order) as A. Keys are matched with Object.hasOwn: a
+ * question key such as `constructor` passes KEY_RE and must not match the prototype. Pure (node --test). */
+export function compareRuns(r1, r2) {
+  const [a, b] = [r1, r2].sort((x, y) => x.id.localeCompare(y.id));
+  const res = (run) => Object.fromEntries(run.results.map((r) => [r.engine_id, r]));
+  const ra = res(a);
+  const rb = res(b);
+  const engines = Object.keys(ra).filter((id) => Object.hasOwn(rb, id));
+  const keys = Object.keys(a.request.questions).filter((k) => Object.hasOwn(b.request.questions, k));
+  const rows = keys.map((key) => ({
+    key,
+    cells: engines.map((id) => compareCell(own(ra[id].answers, key), own(rb[id].answers, key))),
+  }));
+  return { a, b, engines, rows };
+}
 
 export class History {
   constructor(root, { onOpen, onRerun }) {
@@ -68,7 +105,12 @@ export class History {
   }
 
   async open(id) {
-    this.onOpen(await api.getRun(id));
+    try {
+      this.onOpen(await api.getRun(id));
+    } catch (e) {
+      this.error = e.message;
+      this.render();
+    }
   }
 
   async compare() {
@@ -78,31 +120,23 @@ export class History {
       box.replaceChildren(el('p', { class: 'dim' }, t('select_two')));
       return;
     }
-    // older run first: A is the reference
-    const runs = (await Promise.all(ids.map((id) => api.getRun(id)))).sort((x, y) => x.created_at.localeCompare(y.created_at));
-    const [a, b] = runs;
-    const res = (run) => Object.fromEntries(run.results.map((r) => [r.engine_id, r]));
-    const ra = res(a);
-    const rb = res(b);
-    const engines = Object.keys(ra).filter((id) => id in rb);
-    const keys = Object.keys(a.request.questions).filter((k) => k in b.request.questions);
-    const head = el('tr', {}, el('th', {}, t('questions')),
-      engines.map((id) => el('th', {}, id)));
-    const rows = keys.map((k) => el('tr', {}, el('th', { class: 'mono' }, k), engines.map((id) => {
-      const x = ra[id]?.answers?.[k];
-      const y = rb[id]?.answers?.[k];
-      if (!x || !y) return el('td', { class: 'dim' }, '—');
-      const pa = x.probabilities[x.top];
-      const pb = y.probabilities[x.top] ?? 0;
-      const d = pb - pa;
-      return el('td', { class: Math.abs(d) >= 0.05 || x.top !== y.top ? 'diff' : '' },
-        el('div', { class: 'mono' }, `${x.top}: ${fmtP(pa)} → ${fmtP(pb)}`),
-        el('div', { class: 'mono small' }, `${t('delta')} ${Math.abs(d) < 0.0005 ? '±0.000' : `${d > 0 ? '+' : ''}${d.toFixed(3)}`}`,
-          x.top !== y.top ? ` · B: ${y.top}` : ''));
-    })));
+    let runs;
+    try {
+      runs = await Promise.all(ids.map((id) => api.getRun(id)));
+    } catch (e) {
+      box.replaceChildren(el('p', { class: 'error' }, e.message));
+      return;
+    }
+    const { a, b, engines, rows } = compareRuns(runs[0], runs[1]);
+    const head = el('tr', {}, el('th', {}, t('questions')), engines.map((id) => el('th', {}, id)));
+    const body = rows.map((row) => el('tr', {}, el('th', { class: 'mono' }, row.key), row.cells.map((c) => (c
+      ? el('td', { class: c.changed ? 'diff' : '' }, el('div', { class: 'mono' }, c.text),
+        c.sub ? el('div', { class: 'mono small' }, c.sub) : '')
+      : el('td', { class: 'dim' }, '—')))));
     box.replaceChildren(
       el('h3', {}, t('compare_title')),
       el('p', { class: 'dim small' }, `A ${when(a.created_at)} · ${a.title || a.id}  —  B ${when(b.created_at)} · ${b.title || b.id}`),
-      el('div', { class: 'table-wrap' }, el('table', { class: 'compare' }, el('thead', {}, head), el('tbody', {}, rows))));
+      el('div', { class: 'table-wrap' }, el('table', { class: 'compare' }, el('thead', {}, head), el('tbody', {}, body))));
   }
+
 }

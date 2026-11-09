@@ -201,6 +201,13 @@ td.diff { background: var(--warn-soft); }
 .qcell .badge { margin-top: 4px; }
 .detail { margin-top: 6px; color: var(--text-dim); }
 
+/* ── local models ─────────────────────────────────────────────── */
+h2.section { font-size: 14px; margin: 0; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); }
+.badge.lm-ready, .chip.lm-ready { color: var(--ok); background: var(--ok-soft); }
+.badge.lm-busy, .badge.lm-loading, .chip.lm-busy, .chip.lm-loading { color: var(--warn); background: var(--warn-soft); }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 6px 0 10px; }
+pre.code { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; overflow-x: auto; white-space: pre; }
+
 /* ── history ──────────────────────────────────────────────────── */
 .filters { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
 table.history td button { padding: 2px 8px; }

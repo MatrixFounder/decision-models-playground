@@ -4,8 +4,9 @@
 (вероятности, задержка, цена, снимок модели) ложатся рядом. Плюс локальный сервер `POST /v1/systemone`, через который
 стенд whip-insight подключает d1-модели, работающие на Mac.
 
-> **Статус (2026-11-09):** P0 (спайк, [docs/SPIKE.md](docs/SPIKE.md)) и P1 выполнены: Workbench, история и бюджет
-> работают с облачными моделями OpenRouter. Локальные d1 и compat-сервер — P2. План — [docs/DESIGN.md](docs/DESIGN.md) §22.
+> **Статус (2026-11-09):** P0 (спайк, [docs/SPIKE.md](docs/SPIKE.md)), P1 и P2 выполнены: Workbench, история и бюджет
+> с облачными моделями OpenRouter и локальными d1 (MLX), compat-сервер `/v1/systemone` для whip-insight. Дальше —
+> проба возможностей (P3). План — [docs/DESIGN.md](docs/DESIGN.md) §22.
 
 ## Что это и зачем
 
@@ -46,19 +47,29 @@ Decision-модель (Jev от TypeSafe, d1 от Liquid AI, Microsoft-Decision-
 ```bash
 make setup                         # .venv, зависимости (+ requirements-mlx.txt на Apple Silicon), .env и config.yaml из примеров
 $EDITOR .env                       # OPENROUTER_API_KEY; права 600
+make models                        # скачать d1-2B и d1-Omni (8-bit MLX, ~4.6 ГБ) в HF_HOME
 make check                         # какие движки готовы, каталог, расход за сегодня
-make run                           # UI http://127.0.0.1:8790
-make test                          # тесты без сети и ключей
+make run                           # UI http://127.0.0.1:8790 и compat-сервер :8791
+make test                          # тесты без сети, ключей и моделей
 ```
 
 - Workbench: вставить звонок (или выбрать пресет), задать вопросы, отметить движки, «Запустить». Оценка стоимости
   видна до запуска, расход за день — в шапке.
 - Ссылки: `/?run=<id>` открывает прогон, `/?compare=<id1>,<id2>` сравнивает два.
-- `make models` (скачать MLX-модели) понадобится с P2; compat-сервер `:8791` — тоже P2.
+- Локальные модели: одна в памяти, выгружается через 10 минут простоя или кнопкой на экране «Локальные модели».
+- Compat-сервер для стенда whip-insight: в `.env` задать `SYSTEMONE_TOKEN` (≥ 32 символа, например
+  `openssl rand -hex 24`) и `COMPAT_HOST=0.0.0.0`; без токена сервер слушает только этот Mac. Проверка:
+
+  ```bash
+  curl -s http://127.0.0.1:8791/v1/systemone -H "Authorization: Bearer $SYSTEMONE_TOKEN" \
+    -H 'Content-Type: application/json' -d @tests/fixtures/requests/whip_insight_systemone.json
+  ```
 
 ## Данные и лицензии
 
 - Реальные звонки остаются на диске в `runs/` и `datasets/` (оба в `.gitignore`); в OpenRouter уходят с ZDR.
+- Черновик Workbench (транскрипт и вопросы) браузер хранит в `localStorage`, чтобы пережить перезагрузку; это копия
+  звонка вне `runs/`, и `make clean-runs` её не удаляет.
 - Открытые d1 — LFM Open License v1.0: коммерческое использование разрешено при годовой выручке компании меньше
   $10 000 000. Владелец разрешил их 2026-11-08; на новой инсталляции условие проверяется заново.
 

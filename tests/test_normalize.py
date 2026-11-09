@@ -104,6 +104,11 @@ BAD = [
     ("score wrong levels", "interest", {"type": "score", "probabilities": {"0": 0.5, "1": 0.5}}),
     ("score NaN", "interest", {"type": "score", "probabilities": {"0": float("nan"), "1": 0, "2": 1, "3": 0}}),
     ("not a dict", "interest", ["score"]),
+    # the ± 0.001 tolerance of §6.2, pinned on both sides
+    ("choice sum 1.002", "call_topic", {"type": "choice", "probabilities": {"credit": 0.502, "deposit": 0.5, "complaint": 0}}),
+    ("choice sum 0.998", "call_topic", {"type": "choice", "probabilities": {"credit": 0.498, "deposit": 0.5, "complaint": 0}}),
+    ("choice unhashable pick", "call_topic", {"type": "choice", "choice": ["credit"],
+                                              "probabilities": {"credit": 1, "deposit": 0, "complaint": 0}}),
 ]
 
 
@@ -120,3 +125,33 @@ def test_rounded_jev_probabilities_pass():
     q = Question(type="choice", instructions="?", criteria={"a": None, "b": None, "c": None})
     a = normalize_answer(q, {"type": "choice", "choice": "a", "probabilities": {"a": 0.33, "b": 0.33, "c": 0.3405}})
     assert isinstance(a, Answer)  # sum 1.0005 is inside ± 0.001
+
+
+def test_tolerance_inside_the_bound_passes():
+    q = CORE.questions["call_topic"]
+    for total in (1.0009, 0.9991):
+        assert isinstance(normalize_answer(q, {"type": "choice", "probabilities": {"credit": total - 0.5, "deposit": 0.5, "complaint": 0}}), Answer)
+
+
+@pytest.mark.parametrize("key,raw", [
+    ("application_id", {"type": "text", "text": "x", "span": [5, 2], "found": 0.9}),         # end before start
+    ("application_id", {"type": "text", "text": "x", "span": ["a", "b"], "found": 0.9}),
+    ("application_id", {"type": "text", "text": "x", "span": [1, 2, 3], "found": 0.9}),
+    ("application_id", {"type": "text", "text": 5, "span": [1, 2], "found": 0.9}),
+    ("application_id", {"type": "text", "text": "x", "found": 1.5}),
+    ("amount", {"type": "number", "number": "many", "found": 0.9}),
+    ("amount", {"type": "number", "number": 3, "unit": 7, "found": 0.9}),
+    ("amount_estimate", {"type": "number", "number": 1, "interval": [1, "x"]}),
+    ("amount_estimate", {"type": "number", "number": 1, "interval": [float("inf"), 2]}),
+    ("visit_date", {"type": "date", "date": 20261112, "found": 0.9}),
+])
+def test_malformed_extractions_are_invalid_not_a_crash(key, raw):
+    from app.engines.base import ANSWER_NAMES, _normalize
+
+    # the explicit checks, not the never-raising wrapper, must catch these (round 2)
+    assert _normalize(EXT.questions[key], raw, ANSWER_NAMES["system_one"]) == "invalid_answer"
+
+
+def test_noul_exactly_one_half_reads_true():
+    a = normalize_answer(CORE.questions["callback_agreed"], {"type": "noul", "noul": 0.5})
+    assert a.top == "true" and a.top_p == 0.5

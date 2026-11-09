@@ -21,6 +21,7 @@ class EngineContext:
     settings: Settings
     catalog: Catalog
     budget: BudgetConfig
+    local: Any = None  # app.local_models.LocalModels, shared by the UI and the compat server
 
 
 class PlannedEngine(BaseEngine):
@@ -48,13 +49,13 @@ def load_config(path: Path) -> tuple[AppConfig, Path]:
 
 class Registry:
     def __init__(self, settings: Settings, catalog: Catalog, config: AppConfig | None = None,
-                 transport: httpx.AsyncBaseTransport | None = None):
+                 transport: httpx.AsyncBaseTransport | None = None, local: Any = None):
         if config is None:
             config, self.config_source = load_config(settings.config_path)
         else:
             self.config_source = None
         self.config = config
-        self.ctx = EngineContext(settings=settings, catalog=catalog, budget=config.budget)
+        self.ctx = EngineContext(settings=settings, catalog=catalog, budget=config.budget, local=local)
         self.engines: dict[str, BaseEngine] = {}
         for spec in config.engines:
             if spec.id in self.engines:

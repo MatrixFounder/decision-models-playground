@@ -73,8 +73,8 @@ class Catalog:
     async def refresh_quietly(self) -> None:
         try:
             await self.refresh()
-        except (httpx.HTTPError, ValueError, KeyError) as e:
-            self.error = f"{type(e).__name__}: {e}"
+        except Exception as e:  # an odd catalog shape must not leave an unretrieved task exception at start-up
+            self.error = f"{type(e).__name__}: {e}"[:300]
 
     def model(self, model_id: str | None) -> dict[str, Any] | None:
         if not model_id:

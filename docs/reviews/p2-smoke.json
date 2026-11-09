@@ -1,0 +1,109 @@
+{
+ "run_at": "2026-11-09T14:42:10+0300",
+ "checks": {
+  "1 d1-2B answers the core request with a dated snapshot": {
+   "passed": true,
+   "data": {
+    "status": "ok",
+    "request_failure": null,
+    "detail": null,
+    "snapshot": "LiquidAI/d1-2B-MLX-8bit-20261105",
+    "input_tokens": 392,
+    "latency_ms": 336,
+    "timings": {
+     "queue_ms": 0,
+     "load_ms": 1596,
+     "call_ms": 336
+    },
+    "question_failures": {},
+    "answers": {
+     "callback_agreed": [
+      "true",
+      0.995
+     ],
+     "call_topic": [
+      "deposit",
+      0.986
+     ],
+     "interest": [
+      "2",
+      0.723
+     ]
+    }
+   }
+  },
+  "2a d1-Omni evicts d1-2B and answers": {
+   "passed": true,
+   "data": {
+    "status": "ok",
+    "request_failure": null,
+    "detail": null,
+    "snapshot": "LiquidAI/d1-Omni-2B-MLX-8bit-20261105",
+    "input_tokens": 261,
+    "latency_ms": 169,
+    "timings": {
+     "queue_ms": 0,
+     "load_ms": 1711,
+     "call_ms": 169
+    },
+    "question_failures": {},
+    "answers": {
+     "call_kind": [
+      "network_message",
+      0.639
+     ]
+    }
+   }
+  },
+  "2b the 10.6 s clip added its audio tokens": {
+   "passed": true,
+   "data": {
+    "with_audio": 261,
+    "without": 128,
+    "added": 133
+   }
+  },
+  "3a a media dict in instructions is unsupported": {
+   "passed": true,
+   "data": {
+    "status": "partial",
+    "request_failure": null,
+    "detail": null,
+    "snapshot": "LiquidAI/d1-Omni-2B-MLX-8bit-20261105",
+    "input_tokens": 26,
+    "latency_ms": 25,
+    "timings": {
+     "queue_ms": 0,
+     "load_ms": 0,
+     "call_ms": 25
+    },
+    "question_failures": {
+     "spoken": "unsupported"
+    },
+    "answers": {
+     "ok": [
+      "false",
+      0.759
+     ]
+    }
+   }
+  },
+  "3b a nested state is too long by the real tokenizer, and d1-2B was not loaded for it": {
+   "passed": true,
+   "data": {
+    "detail": "64314 tokens in the row > context_tokens 32768"
+   }
+  },
+  "3c the refused request did not touch the loaded model": {
+   "passed": true,
+   "data": {}
+  },
+  "4 unload returns MLX memory to 0": {
+   "passed": true,
+   "data": {
+    "active_gb": 0.0
+   }
+  }
+ },
+ "passed": true
+}

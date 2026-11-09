@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import re
 import time
 from typing import Any
@@ -31,8 +32,36 @@ from app.schemas import (
 )
 
 URL = "https://openrouter.ai/api/alpha/decisions"
-PROVIDER_ZDR = {"zdr": True, "data_collection": "deny"}
-BOX_INDEX = re.compile(r"question (\d+) is an? (\w+)")
+# P0: "Liquid does not accept box questions; question 1 is a box" — only that phrase marks a question unsupported
+BOX_INDEX = re.compile(r"question (\d+) is a box\b")
+
+
+def _finite_number(x: Any) -> float | None:
+    """A finite, non-negative number as float, else None — including a 400-digit int (OverflowError)."""
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        return None
+    try:
+        f = float(x)
+    except OverflowError:
+        return None
+    return f if math.isfinite(f) and f >= 0 else None
+
+
+def _count(x: Any) -> int | None:
+    """A token count: a non-negative whole number, else None (an odd field never sinks the result)."""
+    f = _finite_number(x)
+    return int(f) if f is not None and f == int(f) else None
+
+
+def _cost(x: Any) -> float | None:
+    return _finite_number(x)
+
+
+def scrub(data: Any) -> Any:
+    """An error body names the account (`user_id`); records and the UI never carry it (§18, P0 redacted it too)."""
+    if isinstance(data, dict) and "user_id" in data:
+        return {**data, "user_id": "<user_id>"}
+    return data
 
 
 def system_one_question(q: Question) -> dict[str, Any]:
@@ -75,9 +104,10 @@ def error_text(body: Any, status: int) -> str:
     if isinstance(msg, str):
         try:  # a zod list: keep its human message
             issues = json.loads(msg)
-            msg = "; ".join(str(i.get("message")) for i in issues if isinstance(i, dict)) or msg
         except ValueError:
-            pass
+            issues = None
+        if isinstance(issues, list):
+            msg = "; ".join(str(i.get("message")) for i in issues if isinstance(i, dict)) or msg
         return f"HTTP {status}: {msg[:300]}"
     return f"HTTP {status}"
 
@@ -131,8 +161,8 @@ class OpenRouterDecisions(BaseEngine):
             "state": req.state,
             "questions": {k: system_one_question(req.questions[k]) for k in keys},
         }
-        if self.spec.zdr:
-            body["provider"] = dict(PROVIDER_ZDR)
+        # data_collection: deny always; ZDR unless the engine is configured without it and the run confirmed that
+        body["provider"] = {"zdr": True, "data_collection": "deny"} if self.spec.zdr else {"data_collection": "deny"}
         return body
 
     async def run(self, req: DecisionRequest, opts: RunOptions) -> EngineResult:
@@ -153,7 +183,6 @@ class OpenRouterDecisions(BaseEngine):
             return done({}, request_failure="refused", detail="OPENROUTER_API_KEY is not set")
 
         sent = keys
-        deadline = asyncio.get_running_loop().time() + max(self.spec.timeout_s * 2 + self.retry_delay_s, 1)
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
         for round_ in (1, 2):
             body = self.body(req, sent)
@@ -163,6 +192,8 @@ class OpenRouterDecisions(BaseEngine):
                             detail=f"{size} bytes > max_request_bytes {self.spec.max_request_bytes}")
             try:
                 async with self.sem:
+                    # the deadline starts with the call, not in the queue for a slot (review P1)
+                    deadline = asyncio.get_running_loop().time() + self.spec.timeout_s * 2 + self.retry_delay_s
                     r = await self.post(self.url, body, headers, deadline)
             except EngineFailure as e:
                 return done({}, request_failure=e.cls, detail=e.detail)
@@ -179,15 +210,22 @@ class OpenRouterDecisions(BaseEngine):
                     failures.update({k: "unsupported" for k in named})
                     sent = [k for k in sent if k not in named]
                     if not sent:
-                        return done({}, detail=error_text(data, status), raw=truncate_raw(data))
+                        return done({}, detail=error_text(data, status), raw=truncate_raw(scrub(data)))
                     continue
             cls = {413: "too_long", 429: "rate_limited", 408: "timed_out"}.get(status, "refused")
             if status == 200:
                 cls = "provider_error"
-            return done({}, request_failure=cls, detail=error_text(data, status), raw=truncate_raw(data))
-        raise AssertionError("unreachable")
+            return done({}, request_failure=cls, detail=error_text(data, status), raw=truncate_raw(scrub(data)))
+        raise AssertionError("unreachable: round 2 always returns")
 
     def _read(self, data: dict, req: DecisionRequest, sent: list[str], done) -> EngineResult:
+        # usage first: what was billed is kept whatever the answers look like
+        u = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+        usage = Usage(input_tokens=_count(u.get("input_tokens")), output_tokens=_count(u.get("output_tokens")))
+        if (cost := _cost(u.get("cost"))) is not None:
+            usage.cost_usd, usage.cost_source = cost, "provider"
+        elif usage.input_tokens is not None and (price := self.price_per_token()) is not None:
+            usage.cost_usd, usage.cost_source = usage.input_tokens * price, "price"
         failures_here: dict[str, str] = {}
         answers: dict[str, Answer] = {}
         raw_answers = data.get("answers") if isinstance(data.get("answers"), dict) else {}
@@ -197,10 +235,5 @@ class OpenRouterDecisions(BaseEngine):
                 failures_here[k] = a
             else:
                 answers[k] = a
-        u = data.get("usage") if isinstance(data.get("usage"), dict) else {}
-        usage = Usage(input_tokens=u.get("input_tokens"), output_tokens=u.get("output_tokens"))
-        if isinstance(u.get("cost"), (int, float)):
-            usage.cost_usd, usage.cost_source = float(u["cost"]), "provider"
-        elif usage.input_tokens is not None and (price := self.price_per_token()) is not None:
-            usage.cost_usd, usage.cost_source = usage.input_tokens * price, "price"
-        return done(answers, failures_here, snapshot=data.get("model"), usage=usage, raw=truncate_raw(data))
+        model = data.get("model") if isinstance(data.get("model"), str) else None
+        return done(answers, failures_here, snapshot=model, usage=usage, raw=truncate_raw(scrub(data)))

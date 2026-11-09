@@ -15,14 +15,18 @@ const el = (tag, attrs = {}, ...children) => {
   return node;
 };
 
-/** {key: question} → editable list. */
+/** {key: question} → editable list. d1's own `choice` + `multiple: true` is the internal `multi` (DESIGN §6.1):
+ * dropping the flag here would send a multi-select question to the cloud as a plain choice (review P1, HIGH). */
 export function fromRequest(questions = {}) {
   return Object.entries(questions).map(([key, q]) => {
-    const item = { key, type: q.type, instructions: typeof q.instructions === 'string' ? q.instructions : JSON.stringify(q.instructions) };
-    if (q.type === 'noul') item.criteria = { true: q.criteria?.true ?? '', false: q.criteria?.false ?? '' };
-    else if (q.type === 'choice' || q.type === 'multi') item.options = Object.entries(q.criteria || {}).map(([id, d]) => [id, d ?? '']);
-    else if (q.type === 'score') item.levels = [...(q.criteria || [])];
-    if (q.type === 'number') {
+    const type = q.type === 'choice' && q.multiple ? 'multi' : q.type;
+    const structured = typeof q.instructions !== 'string';  // a dict/list hint is edited as JSON and sent as one
+    const item = { key, type, instructions: structured ? JSON.stringify(q.instructions, null, 1) : q.instructions };
+    if (structured) item.instructionsJson = true;
+    if (type === 'noul') item.criteria = { true: q.criteria?.true ?? '', false: q.criteria?.false ?? '' };
+    else if (type === 'choice' || type === 'multi') item.options = Object.entries(q.criteria || {}).map(([id, d]) => [id, d ?? '']);
+    else if (type === 'score') item.levels = [...(q.criteria || [])];
+    if (type === 'number') {
       item.low = q.range?.[0] ?? '';
       item.high = q.range?.[1] ?? '';
       item.step = q.step ?? '';
@@ -32,18 +36,31 @@ export function fromRequest(questions = {}) {
   });
 }
 
-/** Editable list → {key: question}; empty optional fields are dropped. */
+/** Editable list → {key: question}; empty optional fields are dropped. A duplicate question key or option id
+ * throws (the last one used to win silently, review P1). */
 export function toRequest(list) {
   const out = {};
   for (const item of list) {
-    const q = { type: item.type, instructions: item.instructions };
+    const key = item.key.trim();
+    if (Object.hasOwn(out, key)) throw new Error(t('duplicate_key', { key }));
+    let instructions = item.instructions;
+    if (item.instructionsJson) {
+      try { instructions = JSON.parse(item.instructions); } catch { /* edited into plain text: send it as text */ }
+    }
+    const q = { type: item.type, instructions };
     if (item.type === 'noul') {
       const c = {};
       if (item.criteria?.true?.trim()) c.true = item.criteria.true.trim();
       if (item.criteria?.false?.trim()) c.false = item.criteria.false.trim();
       if (Object.keys(c).length) q.criteria = c;
     } else if (item.type === 'choice' || item.type === 'multi') {
-      q.criteria = Object.fromEntries((item.options || []).map(([id, d]) => [id.trim(), d.trim() ? d.trim() : null]));
+      const criteria = {};
+      for (const [id, d] of item.options || []) {
+        const oid = id.trim();
+        if (Object.hasOwn(criteria, oid)) throw new Error(t('duplicate_option', { key, id: oid }));
+        criteria[oid] = d.trim() ? d.trim() : null;
+      }
+      q.criteria = criteria;
     } else if (item.type === 'score') {
       q.criteria = (item.levels || []).map((s) => s.trim());
     }
@@ -52,7 +69,7 @@ export function toRequest(list) {
       if (item.step !== '' && item.step != null && q.range) q.step = Number(item.step);
       if (item.unit?.trim()) q.unit = item.unit.trim();
     }
-    out[item.key.trim()] = q;
+    out[key] = q;
   }
   return out;
 }
@@ -70,6 +87,7 @@ function retype(item, type) {
   const next = blank(type, 0);
   next.key = item.key;
   next.instructions = item.instructions;
+  if (item.instructionsJson) next.instructionsJson = true;
   if ((type === 'choice' || type === 'multi') && item.options) next.options = item.options;
   if (type === 'choice' && item.levels) next.options = item.levels.map((s, i) => [`l${i}`, s]);
   if (type === 'score' && item.options) next.levels = item.options.map(([id, d]) => d || id);
