@@ -121,6 +121,8 @@ make test      # tests without network, keys or models
 
 ## Using it
 
+Step-by-step instructions for every screen: [User Guide](docs/manuals/user-guide.md).
+
 - **Workbench.** Paste a call (or pick a preset), define questions, tick engines, press "Run". The cost
   estimate shows before the run; the day's spend shows in the header. The draft (transcript and
   questions) survives a page reload.
@@ -214,6 +216,7 @@ The playground writes nothing into whip-insight. The links:
 
 | Document | Contents |
 |---|---|
+| [docs/manuals/user-guide.md](docs/manuals/user-guide.md) | User guide: screens, tasks, local model context, compat server, troubleshooting ([Russian](docs/manuals/user-guide.ru.md)) |
 | [docs/TASK.md](docs/TASK.md) | TASK 001: goals, owner decisions, use cases, requirements, acceptance records of P0–P6, risks |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, data model, engines, interfaces, security, reliability, configuration, tests |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | Work-items; WI-1 is the P7 plan |
