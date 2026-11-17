@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import app.local_models as lm  # noqa: E402
-from app.local_models import Loaded, LocalModels  # noqa: E402
+from app.local_models import Loaded, LocalModels, ModelInfo  # noqa: E402
 
 
 class Hang:
@@ -37,10 +37,13 @@ class HangBackend:
     def count_tokens(self, repo, text):
         return len(text) // 2
 
+    def info(self, repo):
+        return ModelInfo(set_size=16)
+
     def set_size(self, repo):
         return 16
 
-    def validate(self, questions):
+    def validate(self, questions, api="system_one"):
         pass
 
 

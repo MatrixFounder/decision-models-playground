@@ -278,6 +278,13 @@ class EngineSpec(BaseModel):
     context_tokens: int | None = None
     audio: bool = False
     mode: str | None = None
+    path: str | None = None  # mlx_local: a model folder (LM Studio, `hf download --local-dir`) instead of the HF cache
+
+    @model_validator(mode="after")
+    def _path_is_local(self) -> EngineSpec:
+        if self.path is not None and self.kind != "mlx_local":
+            raise ValueError(f"engine {self.id}: path is for mlx_local engines only")
+        return self
 
     @model_validator(mode="after")
     def _openrouter_base(self) -> EngineSpec:

@@ -1,4 +1,4 @@
-"""P0 spike: a local d1 model through mlx-vlm (docs/ARCHITECTURE.md §3.5.4, §3.6; docs/TASK.md §8.1 P0).
+"""P0 spike: a local d1 model through mlx-vlm (docs/ARCHITECTURE.md §3.5.4, §3.6; docs/tasks/task-001-decision-models-playground-v1.md §8.1 P0).
 
 Measures, for one model per process (the Mac holds one model, §8):
 - the load call and its time, memory after load (MLX active/peak, process max RSS);

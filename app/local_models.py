@@ -11,12 +11,16 @@
   tied to a thread, and a hung operation must not keep the interpreter from exiting (review P2).
 - Facts from P0 (docs/SPIKE.md §2): load 1.3-1.7 s; 2.1-2.5 GB after load; `del` + `gc.collect()` +
   `mx.clear_cache()` return MLX memory to 0; d1-Omni's first audio call is 1.8 s, so loading Omni warms it up.
+- TASK 002: a model's config.json names its mlx-vlm decision API (`decision_api`): `system_one` (d1-2B, d1-Omni) or
+  `predict` (d1-3B, mlx-vlm model type `d1`). An engine with `path` reads a model folder (LM Studio) instead of the
+  HF cache (`local_folders`); d1-3B fp16 loads in 3.4 s and holds 5.8 GB (TASK 002 §7).
 """
 
 from __future__ import annotations
 
 import asyncio
 import gc
+import importlib
 import json
 import logging
 import os
@@ -59,6 +63,111 @@ class Loaded:
     snapshot: str
     loaded_at: float
     load_ms: int
+    api: str = "system_one"  # the mlx-vlm decision API of the loaded model: system_one | predict
+
+
+SYSTEM_ONE, PREDICT = "system_one", "predict"
+PREDICT_TYPES_ONLY = "this checkpoint serves noul, choice and score questions only"
+ROOT = Path(__file__).resolve().parents[1]  # the repository (app.settings.ROOT; no import, no cycle)
+_MLX_VLM_IMPORTS = threading.Lock()
+
+
+@dataclass(frozen=True)
+class ModelInfo:
+    """What `config.json` says about a d1 checkpoint (ARCHITECTURE §3.5.4)."""
+
+    api: str = SYSTEM_ONE  # system_one | predict
+    set_size: int = 4  # questions per counted row
+    image_tokens: int | None = None  # a picture's allowance; None: d1's pixel rule (D1_VISION_MAX_PIXELS)
+
+
+def mlx_vlm_import(name: str) -> Any:
+    """An mlx-vlm module, imported under one process-wide lock. Two threads that import mlx-vlm for the first time
+    through different modules (`mlx_vlm.decision` and `mlx_vlm.models.d1_lfm3_vl.prompt`) deadlock on its circular
+    package imports: `_DeadlockError` in a run of d1-3B next to d1-2B, 5 of 5 fresh processes (TASK 002
+    acceptance). Once imported, a module comes back from sys.modules at once. A module mlx-vlm no longer has is a
+    `LoadError` that names it (RQ-14): the request is `unreachable`, compat answers 503."""
+    with _MLX_VLM_IMPORTS:
+        try:
+            return importlib.import_module(name)
+        except ImportError as e:
+            raise LoadError(f"the installed mlx-vlm has no {name}: {type(e).__name__}: {e}"[:300]) from e
+
+
+def decision_api(cfg: dict[str, Any]) -> str:
+    """The mlx-vlm decision API a checkpoint's config names, by mlx-vlm's own rule (utils.get_model_type): LFM2-VL
+    weights whose `auto_map.AutoModel` is a `D1Model` load as model type `d1`, which has `predict` and no
+    `system_one`. Everything else keeps the system_one API of d1-2B and d1-Omni."""
+    model_type = str(cfg.get("model_type") or "").lower()
+    model_type = {"lfm2-vl": "lfm2_vl"}.get(model_type, model_type)  # mlx-vlm's MODEL_REMAPPING
+    auto_map = cfg.get("auto_map") if isinstance(cfg.get("auto_map"), dict) else {}
+    if model_type == "lfm2_vl" and str(auto_map.get("AutoModel", "")).endswith("D1Model"):
+        return PREDICT
+    return SYSTEM_ONE
+
+
+def _positive_int(value: Any, default: int) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else default
+
+
+def model_info(cfg: dict[str, Any]) -> ModelInfo:
+    """ModelInfo of a config.json (ARCHITECTURE §3.5.4):
+    - predict: the state is read once and each question is its own branch, so a row holds one question; a picture
+      is at most `max_tiles` tiles plus a thumbnail of `max_image_tokens` each, plus markup (measured: 2,829 tokens
+      at 10 x 256, TASK 002 §7);
+    - system_one: `d1_set_size` questions a row (mlx-vlm's default 4); pictures by d1's pixel rule."""
+    if decision_api(cfg) == PREDICT:
+        tiles = _positive_int(cfg.get("max_tiles"), 10)
+        per_tile = _positive_int(cfg.get("max_image_tokens"), 256)
+        return ModelInfo(api=PREDICT, set_size=1, image_tokens=(tiles + 1) * per_tile + 100)
+    return ModelInfo(api=SYSTEM_ONE, set_size=_positive_int(cfg.get("d1_set_size"), 4))
+
+
+def resolve_folder(path: str) -> Path:
+    """A configured model folder: `~` expanded, a relative path taken from the repository root."""
+    folder = Path(path).expanduser()
+    return folder if folder.is_absolute() else ROOT / folder
+
+
+def local_folders(engines: Any) -> dict[str, Path]:
+    """{repo: folder} of the enabled mlx_local engines with `path`. The backend keys models by repo, so one repo with
+    two sources (two folders, or a folder and the HF cache) would load whichever came last: ValueError at start. A
+    disabled engine is never called and is left out; folders are compared after resolving links and `..`."""
+    sources: dict[str, Path | None] = {}
+    for e in engines:
+        name = e.repo or e.model
+        if e.kind != "mlx_local" or not name or not e.enabled:
+            continue
+        source = resolve_folder(e.path).resolve() if e.path else None  # None: the HF cache
+        if name in sources and sources[name] != source:
+            raise ValueError(f"engine {e.id}: {name} is already read from {sources[name] or 'the HF cache'}, "
+                             f"not from {source or 'the HF cache'}; give one of them another repo name")
+        sources[name] = source
+    return {name: folder for name, folder in sources.items() if folder is not None}
+
+
+def predict_checks(questions: dict[str, Any]) -> None:
+    """The question checks of the predict family, before any model is loaded: `multiple` is refused (d1-3B would
+    answer it as a single choice, TASK 002 §7), then mlx-vlm's own `decision.predict` checks run against a
+    stand-in with the d1 class's `decision_types`, then d1's `as_question`. ValueError names the question."""
+    predict = mlx_vlm_import("mlx_vlm.decision").predict
+    Model = mlx_vlm_import("mlx_vlm.models.d1").Model
+    as_question = mlx_vlm_import("mlx_vlm.models.d1.prompt").as_question
+
+    class Checks:  # what mlx-vlm checks before it calls the model's own predict
+        decision_types, decision_media = Model.decision_types, Model.decision_media
+
+        def predict(self, processor: Any, state: Any, normalized: dict[str, Any], **kw: Any) -> None:
+            for q in normalized.values():
+                as_question(q)
+
+    for name, q in questions.items():
+        try:
+            if q.get("multiple"):
+                raise ValueError(PREDICT_TYPES_ONLY)
+            predict(Checks(), None, None, {name: q})
+        except ValueError as e:
+            raise ValueError(f"question {name!r}: {e}") from None
 
 
 class Backend(Protocol):
@@ -69,8 +178,9 @@ class Backend(Protocol):
     def memory_gb(self) -> float | None: ...
     def disk_gb(self, repo: str) -> float | None: ...
     def count_tokens(self, repo: str, text: str) -> int: ...
+    def info(self, repo: str) -> ModelInfo: ...
     def set_size(self, repo: str) -> int: ...
-    def validate(self, questions: dict[str, Any]) -> None: ...
+    def validate(self, questions: dict[str, Any], api: str = SYSTEM_ONE) -> None: ...
 
 
 class MlxThread(Executor):
@@ -213,31 +323,43 @@ def render_state(state: Any) -> str:
 
 
 class MlxBackend:
-    def __init__(self, snapshots: SnapshotDates):
+    def __init__(self, snapshots: SnapshotDates, folders: dict[str, Path] | None = None):
         self.snapshots = snapshots
+        self.folders = dict(folders or {})  # repo → a model folder read instead of the HF cache
         self._disk: dict[str, tuple[float, float | None]] = {}
         self._tokenizers: dict[str, Any] = {}
-        self._set_sizes: dict[str, int] = {}
+        self._info: dict[str, tuple[float | None, ModelInfo]] = {}  # (read at, info); None: read from config.json
         self._lock = threading.Lock()
 
-    @staticmethod
-    def local_path(repo: str) -> Path:
+    def local_path(self, repo: str) -> Path:
+        """The model's folder when config.yaml gives one (it must hold config.json), else its HF cache snapshot."""
+        folder = self.folders.get(repo)
+        if folder is not None:
+            if not (folder / "config.json").is_file():
+                raise FileNotFoundError(f"{folder} has no config.json")
+            return folder
         from huggingface_hub import snapshot_download
 
         # never download behind the user's back: `make models` does that
         return Path(snapshot_download(repo, local_files_only=True))
 
     def load(self, repo: str, warm_audio: bool) -> Loaded:
+        folder = repo in self.folders
         try:
             path = self.local_path(repo)
         except Exception as e:
-            raise LoadError(f"{repo} is not downloaded (make models): {type(e).__name__}") from None
+            where = "its folder has no config.json" if folder else "it is not downloaded (make models)"
+            raise LoadError(f"{repo}: {where}: {type(e).__name__}") from None
+        api = self.info(repo, retry_failure=True).api  # never a cached failure: the family decides what is required
         t0 = time.perf_counter()
         try:
-            from mlx_vlm import load
-
-            model, processor = load(str(path))
-            if not callable(getattr(model, "system_one", None)):
+            self._import_model_module(path)
+            model, processor = mlx_vlm_import("mlx_vlm").load(str(path))
+            if api == PREDICT:
+                if not (callable(getattr(model, "predict", None)) and getattr(model, "decision_types", None)):
+                    raise LoadError(f"{repo} has no predict: its config.json names d1-3B's API, but mlx-vlm loaded "
+                                    f"{type(model).__name__}")
+            elif not callable(getattr(model, "system_one", None)):
                 raise LoadError(f"{repo} has no system_one: not a d1 checkpoint, or mlx-vlm is older than 0.7.11")
         except LoadError:
             self._clear()
@@ -245,7 +367,7 @@ class MlxBackend:
         except Exception as e:
             self._clear()
             raise LoadError(f"loading {repo} failed: {type(e).__name__}: {e}"[:300]) from None
-        if warm_audio:  # optional: a failed warm-up costs the first call 1.8 s, never the model
+        if warm_audio and api == SYSTEM_ONE:  # optional: a failed warm-up costs the first call 1.8 s, never the model
             try:
                 import numpy as np
 
@@ -253,9 +375,24 @@ class MlxBackend:
                 model.system_one(None, {"warm": {"type": "noul", "instructions": "Is anyone speaking?"}}, [silence])
             except Exception as e:
                 log.warning("audio warm-up of %s failed: %s", repo, e)
-        return Loaded(repo=repo, model=model, processor=processor, path=str(path), revision=path.name,
-                      snapshot=self.snapshots.snapshot(repo, path.name), loaded_at=time.time(),
-                      load_ms=int((time.perf_counter() - t0) * 1000))
+        # a folder carries no commit: its snapshot is the undated repo id, never a date the folder cannot prove
+        revision = "local" if folder else path.name
+        snapshot = repo if folder else self.snapshots.snapshot(repo, path.name)
+        return Loaded(repo=repo, model=model, processor=processor, path=str(path), revision=revision,
+                      snapshot=snapshot, loaded_at=time.time(), load_ms=int((time.perf_counter() - t0) * 1000),
+                      api=api)
+
+    @staticmethod
+    def _import_model_module(path: Path) -> None:
+        """mlx-vlm's load imports `mlx_vlm.models.<type>` itself; import it first under the import lock, so that
+        import never races a validation's first import on another thread. Best effort: load reports any failure."""
+        try:
+            cfg = json.loads((path / "config.json").read_text(encoding="utf-8"))
+            model_type = mlx_vlm_import("mlx_vlm.utils").get_model_type(cfg)
+            if model_type:
+                mlx_vlm_import(f"mlx_vlm.models.{model_type}")
+        except Exception:
+            pass
 
     @staticmethod
     def _clear() -> None:
@@ -271,8 +408,7 @@ class MlxBackend:
         tokenizer = getattr(loaded.processor, "tokenizer", None)
         loaded.model = loaded.processor = None
         try:  # mlx-vlm keeps every tokenizer it has seen in module-level caches (review P2)
-            from mlx_vlm.models.d1_lfm3_vl import prompt
-
+            prompt = mlx_vlm_import("mlx_vlm.models.d1_lfm3_vl.prompt")
             if tokenizer is not None:
                 prompt._TOKENIZERS.pop(id(tokenizer), None)
             prompt._aliases_cached.cache_clear()
@@ -323,31 +459,60 @@ class MlxBackend:
         tok, pattern = self._tokenizer(repo)
         return len(tok.encode(escape_specials(pattern, text), add_special_tokens=False).ids)
 
-    def set_size(self, repo: str) -> int:
-        """Questions packed into one row after the state (`d1_set_size` in config.json; mlx-vlm's default is 4)."""
-        if repo not in self._set_sizes:
+    def info(self, repo: str, retry_failure: bool = False) -> ModelInfo:
+        """ModelInfo from the model's config.json and processor_config.json, without loading it. Kept once read. A
+        failed read gives the system_one defaults; for the HF cache it is retried after DISK_TTL_S (the engine asks
+        on every profile check). A folder model's failure is not kept: `available()` checks the folder live, and a
+        folder that appears must not be read with stale defaults (review TASK 002, C2). `retry_failure` re-reads a
+        kept failure (load). The image processor's own tile limits count when they are higher."""
+        now = time.monotonic()
+        hit = self._info.get(repo)
+        if hit is not None and (hit[0] is None or not retry_failure and now - hit[0] < DISK_TTL_S):
+            return hit[1]
+        try:
+            root = self.local_path(repo)
+            cfg = json.loads((root / "config.json").read_text(encoding="utf-8"))
+            if not isinstance(cfg, dict):
+                raise ValueError("config.json is not an object")
             try:
-                cfg = json.loads((self.local_path(repo) / "config.json").read_text(encoding="utf-8"))
-                self._set_sizes[repo] = int(cfg.get("d1_set_size") or 4)
-            except Exception:
-                return 4  # not cached: the model may be downloaded later
-        return self._set_sizes[repo]
+                proc = json.loads((root / "processor_config.json").read_text(encoding="utf-8"))
+                image = proc.get("image_processor") if isinstance(proc, dict) else None
+            except (OSError, ValueError):
+                image = None
+            if isinstance(image, dict):
+                for key in ("max_tiles", "max_image_tokens"):
+                    if _positive_int(image.get(key), 0) > _positive_int(cfg.get(key), 0):
+                        cfg[key] = image[key]
+            info, when = model_info(cfg), None
+        except Exception:
+            info, when = ModelInfo(), now
+            if repo in self.folders:
+                return info
+        self._info[repo] = (when, info)
+        return info
 
-    def validate(self, questions: dict[str, Any]) -> None:
-        """mlx-vlm's own question checks (pure Python), before any model is loaded; ValueError names the question."""
-        from mlx_vlm.models.d1_lfm3_vl.prompt import as_question, check_question
+    def set_size(self, repo: str) -> int:
+        """Questions counted in one row after the state: `d1_set_size` of config.json (mlx-vlm's default 4); 1 for
+        the predict family, which reads each question as its own branch of the state."""
+        return self.info(repo).set_size
 
+    def validate(self, questions: dict[str, Any], api: str = SYSTEM_ONE) -> None:
+        """The family's question checks (pure Python), before any model is loaded; ValueError names the question."""
+        if api == PREDICT:
+            predict_checks(questions)
+            return
+        prompt = mlx_vlm_import("mlx_vlm.models.d1_lfm3_vl.prompt")
         for name, q in questions.items():
             try:
-                check_question(q)
-                as_question(q)
+                prompt.check_question(q)
+                prompt.as_question(q)
             except ValueError as e:
                 raise ValueError(f"question {name!r}: {e}") from None
 
 
 def make_local(settings: Any, config: Any) -> LocalModels:
     """The real manager: MLX backend, commit dates cached in probes/local_snapshots.json."""
-    backend = MlxBackend(SnapshotDates(settings.probes_dir / "local_snapshots.json"))
+    backend = MlxBackend(SnapshotDates(settings.probes_dir / "local_snapshots.json"), local_folders(config.engines))
     return LocalModels(backend, idle_unload_s=config.local.idle_unload_s, max_waiting=config.local.max_waiting)
 
 

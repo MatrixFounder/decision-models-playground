@@ -124,7 +124,7 @@ export class DatasetsView {
     return { engines: [...this.picked], limit: limit > 0 ? limit : null, options: { allow_no_zdr: allowNoZdr } };
   }
 
-  /** The no-ZDR consent belongs to one run (TASK §6.1): read and cleared at the start, as the Workbench does. */
+  /** The no-ZDR consent belongs to one run (TASK 001 §6.1): read and cleared at the start, as the Workbench does. */
   takeConsent() {
     const allow = this.allowNoZdr;
     this.allowNoZdr = false;

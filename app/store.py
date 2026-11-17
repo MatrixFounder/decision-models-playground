@@ -26,7 +26,7 @@ def new_id() -> str:
 
 
 def local_day(ts: float | None = None) -> str:
-    """The budget and folder day: the Mac's local date (ARCHITECTURE §4.3, TASK §6.2)."""
+    """The budget and folder day: the Mac's local date (ARCHITECTURE §4.3, TASK 001 §6.2)."""
     return datetime.fromtimestamp(ts or time.time()).strftime("%Y-%m-%d")
 
 

@@ -78,7 +78,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _hosts(self):
-        # TASK §4, ARCHITECTURE §7.1: the UI has no auth, so it never listens beyond loopback. Only the two names the Host and
+        # TASK 001 §4, ARCHITECTURE §7.1: the UI has no auth, so it never listens beyond loopback. Only the two names the Host and
         # Origin guards of app.main know: `::1` or 127.0.0.2 would pass a loopback test and then refuse every request.
         if self.app_host not in UI_HOSTS:
             raise ValueError(f"APP_HOST must be one of {', '.join(UI_HOSTS)}, not {self.app_host!r} (ARCHITECTURE §7.1)")

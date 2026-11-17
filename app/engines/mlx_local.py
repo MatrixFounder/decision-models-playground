@@ -7,6 +7,11 @@ P0 facts this engine relies on (docs/SPIKE.md §2):
 - `confidence` is p_max (kept as vendor_confidence only);
 - memory grows with the square of the packed row (state + a group of questions + media), not of the state alone.
 
+TASK 002: a model's config.json names one of two mlx-vlm decision APIs (ARCHITECTURE §3.5.4). d1-3B (mlx-vlm model type
+`d1`) has no system_one: it is called through `mlx_vlm.decision.predict`, answers `noul`, `choice`, `score` over text
+and pictures in `mlx_decisions` names, reads each question as its own branch of the state, and answers a `choice`
+with `multiple: true` as a single choice with no error — so `multi` is refused here, before mlx-vlm sees it.
+
 Review P2 hardening:
 - a question whose `instructions` is not text is `unsupported`: d1 reads a dict there as a media item and opens its
   `path` — any file on the Mac, or a URL fetched with no timeout;
@@ -28,11 +33,24 @@ from pathlib import Path
 from typing import Any
 
 from app.engines.base import ANSWER_NAMES, BaseEngine, normalize_answer, truncate_raw
-from app.local_models import Busy, Loaded, LoadError, WaitTimeout, render_state, rendered_length
+from app.local_models import (
+    PREDICT,
+    PREDICT_TYPES_ONLY,
+    SYSTEM_ONE,
+    Busy,
+    Loaded,
+    LoadError,
+    WaitTimeout,
+    mlx_vlm_import,
+    render_state,
+    rendered_length,
+    resolve_folder,
+)
 from app.schemas import MAX_STATE_DEPTH, json_depth
 from app.schemas import (
     MAX_CHOICE_OPTIONS,
     MAX_SCORE_LEVELS,
+    SYSTEM_ONE_TYPES,
     Answer,
     CapabilityProfile,
     DecisionRequest,
@@ -138,9 +156,12 @@ def groups(questions: dict[str, Question], size: int) -> list[dict[str, Question
     return [dict(items[i:i + size]) for i in range(0, len(items), max(1, size))]
 
 
-def allowance(questions: dict[str, Question], images: int = 0, audio: int = 0) -> int:
+def allowance(questions: dict[str, Question], images: int = 0, audio: int = 0, per_image: int | None = None) -> int:
+    """Tokens on top of the counted text; `per_image` is the model's picture allowance (ModelInfo.image_tokens),
+    else d1-2B's pixel rule."""
     options = sum(len(q.criteria) for q in questions.values() if isinstance(q.criteria, (dict, list)))
-    return QUESTION_TOKENS * len(questions) + OPTION_TOKENS * options + image_tokens() * images + AUDIO_TOKENS * audio
+    return (QUESTION_TOKENS * len(questions) + OPTION_TOKENS * options + (per_image or image_tokens()) * images
+            + AUDIO_TOKENS * audio)
 
 
 def compact_len(state: Any) -> int:
@@ -175,6 +196,13 @@ class MlxLocal(BaseEngine):
     def manager(self):
         return self.ctx.local
 
+    @property
+    def api(self) -> str:
+        """The mlx-vlm decision API that the model's config.json names: system_one | predict."""
+        if self.manager is None or not self.repo:
+            return SYSTEM_ONE
+        return self.manager.backend.info(self.repo).api
+
     def available(self) -> tuple[bool, str]:
         if not self.spec.enabled:
             return False, "disabled in config.yaml"
@@ -189,7 +217,10 @@ class MlxLocal(BaseEngine):
             return False, f"mlx-vlm {'.'.join(map(str, version))} < 0.7.11"
         if self.manager is None:
             return False, "the local model manager is not running"
-        if self.manager.backend.disk_gb(self.repo) is None:
+        if self.spec.path:
+            if not (resolve_folder(self.spec.path) / "config.json").is_file():
+                return False, f"{self.spec.path} is not a model folder: no config.json"
+        elif self.manager.backend.disk_gb(self.repo) is None:
             return False, f"{self.repo} is not downloaded: make models"
         return True, "ok"
 
@@ -197,6 +228,9 @@ class MlxLocal(BaseEngine):
         return self.context_tokens
 
     def default_profile(self) -> CapabilityProfile:
+        if self.api == PREDICT:  # d1-3B: System One types over text and pictures, no audio whatever config.yaml says
+            return CapabilityProfile(types=list(SYSTEM_ONE_TYPES), max_choice_options=MAX_CHOICE_OPTIONS,
+                                     max_score_levels=MAX_SCORE_LEVELS, media=["image"], source="default")
         media = ["image"] + (["audio"] if self.spec.audio else [])
         return CapabilityProfile(types=["noul", "choice", "score", "multi", "text", "number", "date"],
                                  max_choice_options=MAX_CHOICE_OPTIONS, max_score_levels=MAX_SCORE_LEVELS,
@@ -211,7 +245,8 @@ class MlxLocal(BaseEngine):
 
     def describe(self) -> dict[str, Any]:
         d = super().describe()
-        d.update(paid=False, local=True, repo=self.repo, audio=self.spec.audio, context_tokens=self.context_tokens)
+        d.update(paid=False, local=True, repo=self.repo, audio=self.spec.audio, context_tokens=self.context_tokens,
+                 api=self.api)
         if self.manager is not None:
             d.update(disk_gb=self.manager.backend.disk_gb(self.repo), **self.manager.describe(self.repo))
         return d
@@ -224,19 +259,21 @@ class MlxLocal(BaseEngine):
             path = (root / m.path).resolve()
             if not path.is_relative_to(root) or not path.is_file():
                 raise ValueError(f"media {m.path!r} is not a file under DATA_DIR/media")
-            if m.type == "audio" and not self.spec.audio:
-                raise ValueError("this model takes no audio")
+            if m.type == "audio" and (not self.spec.audio or self.api == PREDICT):
+                raise ValueError("this model takes no audio")  # d1-3B never, whatever `audio:` says
             out.append({"type": m.type, "path": str(path)})
         return out
 
     async def precheck(self, state: Any, questions: dict[str, Question], images: int = 0, audio: int = 0) -> int:
         """Before the queue, in this order so nothing big is built on the way (review round 2):
-        1. mlx-vlm's question checks (ValueError → refused);
+        1. the model family's question checks (ValueError → refused);
         2. the state's nesting (≤ MAX_STATE_DEPTH) and compact size (≤ RENDER_FACTOR × context) — no rendering;
         3. off the event loop: the state as mlx-vlm renders and escapes it, plus the heaviest group of `set_size`
-           questions, counted by the model's own tokenizer (TooLong). Returns the counted tokens."""
+           questions (1 for the predict family), counted by the model's own tokenizer, plus the family's picture
+           allowance (TooLong). Returns the counted tokens."""
         backend = self.manager.backend
-        await asyncio.to_thread(backend.validate, {k: d1_question(q) for k, q in questions.items()})
+        info = await asyncio.to_thread(backend.info, self.repo)
+        await asyncio.to_thread(backend.validate, {k: d1_question(q) for k, q in questions.items()}, info.api)
         limit = self.context_tokens * RENDER_FACTOR
 
         def measure() -> int:
@@ -252,7 +289,7 @@ class MlxLocal(BaseEngine):
             state_tokens = backend.count_tokens(self.repo, render_state(state)) if state is not None else 0
             worst = max((backend.count_tokens(self.repo, "\n".join(question_text(k, q) for k, q in g.items()))
                          + allowance(g) for g in groups(questions, size)), default=0)
-            return state_tokens + worst + allowance({}, images, audio)
+            return state_tokens + worst + allowance({}, images, audio, info.image_tokens)
 
         try:
             tokens = await asyncio.to_thread(measure)
@@ -264,7 +301,10 @@ class MlxLocal(BaseEngine):
 
     def invoke(self, loaded: Loaded, state: Any, questions: dict[str, Any], media: list | None,
                score_readout: str = "mean") -> dict[str, Any]:
-        """On the MLX thread: one system_one call (the row was measured by `precheck`)."""
+        """On the MLX thread: one call in the API of the model actually loaded (the row was measured by `precheck`).
+        A system_one output is in System One names; a predict output in `mlx_decisions` names."""
+        if loaded.api == PREDICT:
+            return predict_call(loaded, state, questions, media)
         return loaded.model.system_one(state, questions, media or None, score_readout=score_readout)
 
     async def run(self, req: DecisionRequest, opts: RunOptions) -> EngineResult:
@@ -321,8 +361,11 @@ class MlxLocal(BaseEngine):
         answers: dict[str, Answer] = {}
         failures: dict[str, str] = {}
         raw_answers = out.get("answers") if isinstance(out, dict) else None
+        names = ANSWER_NAMES["mlx_decisions" if loaded.api == PREDICT else "system_one"]
+        if loaded.api == PREDICT and isinstance(raw_answers, dict):
+            raw_answers = {k: unrounded(a) for k, a in raw_answers.items()}  # `raw` keeps mlx-vlm's own figures
         for k, q in send.items():
-            a = normalize_answer(q, (raw_answers or {}).get(k), ANSWER_NAMES["system_one"])
+            a = normalize_answer(q, (raw_answers or {}).get(k), names)
             if isinstance(a, str):
                 failures[k] = a
             else:
@@ -333,6 +376,76 @@ class MlxLocal(BaseEngine):
                     usage=Usage(input_tokens=u.get("input_tokens"), output_tokens=u.get("output_tokens", 0),
                                 cost_usd=0.0, cost_source="none"),
                     raw=truncate_raw(json_safe(out)))
+
+
+def predict_call(loaded: Loaded, state: Any, questions: dict[str, Any], media: list | None) -> dict[str, Any]:
+    """One mlx-vlm `decision.predict` call on a predict-family model (d1-3B), on the MLX thread.
+    - media: pictures only — a path from DATA_DIR/media, or a decoded picture from compat; anything else is refused
+      with the message CAPABILITY_REFUSAL reads as "not served";
+    - questions: type, instructions, criteria; `multiple` is refused once more (precheck refused it first);
+    - the output's `model` is the local path of the weights: dropped, so no record or compat answer carries it."""
+    predict = mlx_vlm_import("mlx_vlm.decision").predict
+    images = []
+    for m in media or ():
+        if isinstance(m, dict):
+            if m.get("type") != "image":
+                raise ValueError(f"this checkpoint takes no {m.get('type')}")
+            images.append(m["path"] if m.get("path") is not None else m.get("image"))
+        else:
+            images.append(m)  # a decoded picture (compat)
+    asked = {}
+    for k, q in questions.items():
+        if q.get("multiple"):
+            raise ValueError(f"question {k!r}: {PREDICT_TYPES_ONLY}")
+        asked[k] = {f: q[f] for f in ("type", "instructions", "criteria") if f in q}
+    out = predict(loaded.model, loaded.processor, state, asked, images=images or None)
+    return {k: v for k, v in out.items() if k != "model"} if isinstance(out, dict) else out
+
+
+ROUNDING = 5e-5  # mlx-vlm's d1 `_answer` rounds every probability to 4 places
+
+
+def unrounded(answer: Any) -> Any:
+    """A predict answer whose `probabilities` sum to 1 again. mlx-vlm rounds each probability to 4 places, so a
+    sharp 100-option choice sums to 0.9983 and fails the 0.001 tolerance of `normalize_answer` (review TASK 002,
+    C4). Only a sum within the rounding budget, 0.001 + n × 5e-5, is rescaled; any other sum stays as it is, so a
+    malformed answer is still `invalid_answer`."""
+    probs = answer.get("probabilities") if isinstance(answer, dict) else None
+    if not isinstance(probs, dict) or not probs:
+        return answer
+    values = list(probs.values())
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v >= 0 for v in values):
+        return answer
+    total = sum(values)
+    if total <= 0 or abs(total - 1) > 0.001 + len(values) * ROUNDING:
+        return answer
+    return {**answer, "probabilities": {k: v / total for k, v in probs.items()}}
+
+
+def system_one_answers(answers: dict[str, Any]) -> dict[str, Any]:
+    """`mlx_decisions` answers (the predict family) in System One names, for the compat server (ARCHITECTURE §5.3):
+    `bool` → `noul` with P(true); `value` → `choice` or `score` (already the probability-weighted level);
+    `metadata.confidence` → `confidence`; `metadata.legend` → `legend`. Probabilities are rescaled to sum to 1
+    (`unrounded`). An answer of another shape is left as is."""
+    out: dict[str, Any] = {}
+    for k, a in answers.items():
+        if not isinstance(a, dict):
+            out[k] = a
+            continue
+        a = unrounded(a)
+        meta = a.get("metadata") if isinstance(a.get("metadata"), dict) else {}
+        kind = a.get("type")
+        if kind in ("bool", "noul"):
+            out[k] = {"type": "noul", "noul": a.get("probability")}
+        elif kind == "choice":
+            out[k] = {"type": "choice", "choice": a.get("value"), "confidence": meta.get("confidence"),
+                      "probabilities": a.get("probabilities")}
+        elif kind == "score":
+            out[k] = {"type": "score", "score": a.get("value"), "confidence": meta.get("confidence"),
+                      "probabilities": a.get("probabilities"), "legend": meta.get("legend")}
+        else:
+            out[k] = a
+    return out
 
 
 def json_safe(value: Any) -> Any:

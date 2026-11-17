@@ -5,7 +5,8 @@ Contract for whip-insight's `systemone` adapter (its decision-service.md §5.2):
   `compat.default_model`; extra fields such as `provider` or `keep_alive` are ignored;
 - only noul, choice, score; another type → 400 {"error": {"code": "unsupported_question_type", "type", "question"}},
   which whip-insight reads as `unsupported` for that question (AD-18). The extended types need the header
-  `X-Playground-Extensions: 1`, which whip-insight never sends;
+  `X-Playground-Extensions: 1`, which whip-insight never sends, and a model that answers them (not d1-3B);
+- a predict-family model (d1-3B) answers in `mlx_decisions` names: converted to System One names (TASK 002);
 - answers in System One names; `score` is the probability-weighted level (OpenRouter's meaning, not d1's median);
 - 413 when the row (state as mlx-vlm renders it plus every question) exceeds `context_tokens`; 429 when the local
   queue is full or the wait passes the engine's timeout; 503 when the model cannot load; 500 `model_error` otherwise;
@@ -35,8 +36,16 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from app import __version__
-from app.engines.mlx_local import MlxLocal, TooLong, cheap_chars, d1_question, json_safe, mlx_vlm_version
-from app.local_models import Busy, LoadError, WaitTimeout
+from app.engines.mlx_local import (
+    MlxLocal,
+    TooLong,
+    cheap_chars,
+    d1_question,
+    json_safe,
+    mlx_vlm_version,
+    system_one_answers,
+)
+from app.local_models import PREDICT, Busy, LoadError, WaitTimeout
 from app.registry import Registry
 from app.schemas import MAX_STATE_DEPTH, SYSTEM_ONE_TYPES, Question, json_depth, valid_key
 from app.store import new_id
@@ -145,13 +154,14 @@ def create_compat_app(registry: Registry) -> FastAPI:
         if not isinstance(questions, dict) or not 1 <= len(questions) <= cfg.max_questions:
             return error(400, "invalid_request", message=f"questions: 1 to {cfg.max_questions} named questions")
         parsed: dict[str, Question] = {}
+        served = engine.default_profile().types  # d1-3B serves no extended type, header or not
         for key, q in questions.items():
             if not valid_key(key):
                 return error(400, "invalid_request", message="a question key must match ^[a-z][a-z0-9_]{0,63}$")
             if not isinstance(q, dict):
                 return error(400, "invalid_request", question=key, message="a question is an object")
             kind = "multi" if q.get("type") == "choice" and q.get("multiple") is True else q.get("type")
-            if kind not in SYSTEM_ONE_TYPES and not (extensions and kind in EXTENDED):
+            if kind not in SYSTEM_ONE_TYPES and not (extensions and kind in EXTENDED and kind in served):
                 return error(400, "unsupported_question_type", type=echo(kind), question=key)
             if not isinstance(q.get("instructions"), str) or not q["instructions"].strip():
                 # d1 reads a dict here as a media item and opens its path or URL (review P2)
@@ -224,6 +234,8 @@ def create_compat_app(registry: Registry) -> FastAPI:
             return error(500, "model_error")
 
         raw_answers = out.get("answers") if isinstance(out, dict) else None
+        if loaded.api == PREDICT and isinstance(raw_answers, dict):
+            raw_answers = system_one_answers(raw_answers)
         if not raw_answers or not _finite(raw_answers):  # before json_safe, which would turn NaN into null
             return error(500, "model_error")
         answers = json_safe(raw_answers)

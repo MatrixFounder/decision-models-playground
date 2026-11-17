@@ -9,7 +9,7 @@ This file is a **thin index**. Each work-item lives in its own file under [`docs
 the lines below are one-per-item pointers. Read the linked file for the full signal, options, and
 recommendation.
 
-The delivered scope (increments P0–P6) is [TASK 001](TASK.md). The design is
+The delivered scope (increments P0–P6) is [TASK 001](tasks/task-001-decision-models-playground-v1.md). The design is
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---

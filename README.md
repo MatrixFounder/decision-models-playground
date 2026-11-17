@@ -7,7 +7,7 @@ once; their answers (probabilities, latency, cost, model snapshot) appear side b
 also runs a local `POST /v1/systemone` server, through which the whip-insight stand connects d1 models
 running on the Mac.
 
-> **Status (2026-11-09).** Increments P0–P6 are done ([TASK 001](docs/TASK.md)):
+> **Status (2026-11-09).** Increments P0–P6 are done ([TASK 001](docs/tasks/task-001-decision-models-playground-v1.md)):
 >
 > - Workbench, history and daily budget with OpenRouter cloud models and local d1 (MLX);
 > - compat server `/v1/systemone` for whip-insight;
@@ -60,11 +60,23 @@ Four goals of the first version:
 | Engine kind | Models | Where it runs | Status |
 |---|---|---|---|
 | `openrouter_decisions` | `typesafe/jev-1.14`, `liquid/d1.1`, `~liquid/d1-latest`, others from the catalog | OpenRouter Decisions API, ZDR by default | done |
-| `mlx_local` | `LiquidAI/d1-2B-MLX-8bit`, `LiquidAI/d1-Omni-2B-MLX-8bit` | in process on the Mac, `mlx-vlm >= 0.7.11`, one model in memory | done |
+| `mlx_local` | `LiquidAI/d1-2B-MLX-8bit`, `LiquidAI/d1-Omni-2B-MLX-8bit`, `LiquidAI/d1-3B-MLX-fp16` | in process on the Mac, `mlx-vlm >= 0.7.11`, one model in memory; from the HF cache or a model folder (`path`) | done |
 | `systemone_http` | Ollama `d1`, `d1:2b`; `llama-server` with d1-3B-GGUF; the own compat server | local servers with `/v1/systemone` | planned (WI-1) |
 | `openrouter_llm` | LLM list in `config.yaml` | OpenRouter chat completions; `logprobs` or verbal confidence | planned (WI-1) |
 
 Planned kinds may stay in `config.yaml`: the registry lists them as unavailable.
+
+d1-3B is called through mlx-vlm's `predict` API, not `system_one`; the engine picks the API from the model's
+`config.json`. It answers `noul`, `choice`, `score` over text and pictures: `multi`, `text`, `number`, `date` are
+`unsupported` for it, and a request with audio is `refused`. A model already downloaded elsewhere (LM Studio) is read from its folder:
+
+```yaml
+  - id: mlx-d1-3b
+    kind: mlx_local
+    repo: LiquidAI/d1-3B-MLX-fp16                     # the model's name in the UI, records and compat answers
+    path: ~/.lmstudio/models/LiquidAI/d1-3B-MLX-fp16  # without it, the HF cache (make models)
+    context_tokens: 32768
+```
 
 ## Requirements
 
@@ -113,7 +125,7 @@ or Windows machine.
 ```bash
 make setup     # .venv, dependencies (+ requirements-mlx.txt on Apple Silicon), .env and config.yaml from the examples
 $EDITOR .env   # OPENROUTER_API_KEY; mode 600
-make models    # download d1-2B and d1-Omni (8-bit MLX, ~4.6 GB) into HF_HOME
+make models    # download the enabled MLX models of config.yaml into HF_HOME (d1-2B, d1-Omni ~4.6 GB; d1-3B fp16 6.25 GB = 5.8 GiB)
 make check     # which engines are ready, the catalog, today's spend
 make run       # UI at http://127.0.0.1:8790 and the compat server on :8791
 make test      # tests without network, keys or models
@@ -170,7 +182,7 @@ Step-by-step instructions for every screen: [User Guide](docs/manuals/user-guide
 | Target | What it does |
 |---|---|
 | `make setup` | Create `.venv`, install requirements (+ MLX on Apple Silicon), create `.env` and `config.yaml` from the examples |
-| `make models` | Download the two 8-bit MLX models into `HF_HOME` |
+| `make models` | Download the `repo` of every enabled `mlx_local` engine without `path` into `HF_HOME` |
 | `make run` / `make run-compat` | UI + compat server in the foreground / the compat server only |
 | `make run-bg` / `make stop` | The same in the background (log `/tmp/decision-playground.log`) / stop it |
 | `make check` | Availability of every engine, the catalog cache, today's spend |
@@ -217,7 +229,7 @@ The playground writes nothing into whip-insight. The links:
 | Document | Contents |
 |---|---|
 | [docs/manuals/user-guide.md](docs/manuals/user-guide.md) | User guide: screens, tasks, local model context, compat server, troubleshooting ([Russian](docs/manuals/user-guide.ru.md)) |
-| [docs/TASK.md](docs/TASK.md) | TASK 001: goals, owner decisions, use cases, requirements, acceptance records of P0–P6, risks |
+| [task-001](docs/tasks/task-001-decision-models-playground-v1.md) | TASK 001: goals, owner decisions, use cases, requirements, acceptance records of P0–P6, risks |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, data model, engines, interfaces, security, reliability, configuration, tests |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | Work-items; WI-1 is the P7 plan |
 | [docs/SPIKE.md](docs/SPIKE.md) | P0 spike: live measurements of mlx-vlm, OpenRouter Decisions and chat (Russian) |

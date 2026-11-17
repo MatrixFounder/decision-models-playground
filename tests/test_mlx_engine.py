@@ -161,7 +161,7 @@ async def test_a_too_long_request_does_not_evict_the_loaded_model(settings, loca
 
 
 async def test_mlx_vlm_refusal_happens_before_the_queue(settings, local, fake_backend, monkeypatch):
-    def refuse(questions):
+    def refuse(questions, api="system_one"):
         raise ValueError("question 'q': a score's criteria lists 2 to 10 levels")
 
     monkeypatch.setattr(fake_backend, "validate", refuse)
@@ -294,3 +294,151 @@ def test_image_allowance_follows_d1_vision_max_pixels(monkeypatch, value, tokens
     else:
         monkeypatch.setenv("D1_VISION_MAX_PIXELS", value)
     assert image_tokens() == tokens
+
+
+# --- TASK 002: d1-3B, the mlx-vlm `predict` family, and model folders ---------------------------------------------------
+
+from app.schemas import AppConfig, EngineSpec  # noqa: E402
+from tests.conftest import D1_3B, D1_3B_IMAGE_TOKENS, FakeTokenizer  # noqa: E402
+
+
+@pytest.fixture
+def d1_3b(settings, local, fake_backend):
+    fake_backend.downloaded.add(D1_3B)
+    return engine(settings, local, "mlx-d1-3b")
+
+
+def test_the_predict_profile_has_three_types_and_pictures(d1_3b):
+    assert d1_3b.api == "predict"
+    p = d1_3b.default_profile()
+    assert p.types == ["noul", "choice", "score"] and p.media == ["image"]
+    assert p.max_choice_options == 255 and p.max_score_levels == 10  # 300 options answered in the spike (TASK 002 §7)
+    assert d1_3b.describe()["api"] == "predict"
+
+
+def test_audio_true_adds_no_audio_to_a_predict_model(settings, local, fake_backend):
+    fake_backend.downloaded.add(D1_3B)
+    config = AppConfig.model_validate({"engines": [{"id": "x", "kind": "mlx_local", "repo": D1_3B, "audio": True}]})
+    e = Registry(settings, Catalog(settings.probes_dir / "catalog.json"), config=config, local=local).get("x")
+    assert e.default_profile().media == ["image"]
+
+
+async def test_a_predict_run_reads_mlx_decisions_names(d1_3b, fake_backend):
+    r = await d1_3b.run(DecisionRequest.model_validate(CORE), RunOptions())
+    assert r.status == "ok", (r.request_failure, r.detail, r.question_failures)
+    a = r.answers
+    assert a["callback_agreed"].probabilities == {"true": 0.9, "false": pytest.approx(0.1)}
+    assert a["call_topic"].top == "credit" and a["call_topic"].vendor_confidence == 0.9
+    assert a["interest"].expected == pytest.approx(sum(int(k) * p for k, p in a["interest"].probabilities.items()))
+    assert r.snapshot == D1_3B and r.usage.input_tokens == 382  # a folder model: undated
+    assert "model" not in r.raw and ".lmstudio" not in str(r.raw)  # the folder path is not stored
+    sent = fake_backend.calls[0]["questions"]
+    assert all(set(q) <= {"type", "instructions", "criteria"} for q in sent.values())
+
+
+async def test_extension_types_are_unsupported_on_d1_3b_and_the_rest_answered(settings, local, fake_backend):
+    from app.runner import Runner
+
+    fake_backend.downloaded.add(D1_3B)
+    e = engine(settings, local, "mlx-d1-3b")
+    req = DecisionRequest.model_validate({"state": EXT["state"], "questions": {**EXT["questions"], **CORE["questions"]}})
+    keys, refused = Runner.split(e, req)
+    assert set(keys) == set(CORE["questions"])
+    assert set(refused) == set(EXT["questions"]) and set(refused.values()) == {"unsupported"}
+
+
+async def test_a_multi_question_sent_straight_to_the_engine_is_refused_before_the_queue(d1_3b, fake_backend):
+    """The runner never sends `multi` to d1-3B; the engine itself still refuses it: d1-3B would answer it as a
+    single choice (TASK 002 §7), a wrong answer with no error."""
+    req = DecisionRequest.model_validate({"state": "x", "questions": {"p": EXT["questions"]["products"]}})
+    r = await d1_3b.run(req, RunOptions())
+    assert r.request_failure == "refused" and r.http_status == 400 and "question 'p'" in r.detail
+    assert not fake_backend.loads and not fake_backend.calls
+
+
+async def test_an_audio_item_never_reaches_a_predict_model(d1_3b, fake_backend, settings):
+    from app.engines.mlx_local import predict_call
+    from app.local_models import Loaded
+
+    loaded = Loaded(repo=D1_3B, model=object(), processor=None, path="", revision="local", snapshot=D1_3B,
+                    loaded_at=0, load_ms=0, api="predict")
+    with pytest.raises(ValueError, match="^this checkpoint takes no audio"):
+        predict_call(loaded, None, {"q": {"type": "noul", "instructions": "?"}}, [{"type": "audio", "path": "x.wav"}])
+    with pytest.raises(ValueError, match="^question 'q': "):
+        predict_call(loaded, "x", {"q": {"type": "choice", "multiple": True, "instructions": "?",
+                                         "criteria": {"a": None, "b": None}}}, None)
+
+
+async def test_pictures_reach_predict_by_path(d1_3b, fake_backend, settings):
+    (settings.data_dir / "media" / "photo.png").write_bytes(b"\x89PNG")
+    req = DecisionRequest(state=None, questions=CORE["questions"], media=[{"type": "image", "path": "photo.png"}])
+    r = await d1_3b.run(req, RunOptions())
+    assert r.status == "ok"
+    assert fake_backend.calls[0]["images"] == [str((settings.data_dir / "media" / "photo.png").resolve())]
+
+
+async def test_the_predict_count_takes_one_question_per_row_and_its_picture_allowance(d1_3b, fake_backend):
+    from app.engines.mlx_local import allowance
+
+    qs = {k: Question.model_validate(q) for k, q in CORE["questions"].items()}
+    fake_backend.counted.clear()
+    tokens = await d1_3b.precheck("x" * 100, qs, images=1)
+    rows = fake_backend.counted[1:]  # the state first, then one text per group
+    assert len(rows) == len(qs)  # one question per row, not d1_set_size of them
+    heaviest = max(len(FakeTokenizer().encode(t)) + allowance({k: q}) for t, (k, q) in zip(rows, qs.items()))
+    assert tokens == len(FakeTokenizer().encode("x" * 100)) + heaviest + D1_3B_IMAGE_TOKENS
+
+
+def test_path_is_for_mlx_local_engines_only():
+    EngineSpec(id="a", kind="mlx_local", repo=D1_3B, path="~/m")
+    with pytest.raises(ValueError, match="path"):
+        EngineSpec(id="b", kind="openrouter_decisions", model="liquid/d1.1", path="~/m")
+
+
+def test_a_path_without_config_json_makes_the_engine_unavailable(settings, local, fake_backend, tmp_path):
+    config = AppConfig.model_validate({"engines": [
+        {"id": "x", "kind": "mlx_local", "repo": D1_3B, "path": str(tmp_path / "nowhere")}]})
+    e = Registry(settings, Catalog(settings.probes_dir / "catalog.json"), config=config, local=local).get("x")
+    ok, reason = e.available()
+    assert not ok and "nowhere" in reason and "config.json" in reason
+
+
+async def test_audio_true_on_a_predict_engine_still_refuses_audio_before_any_load(settings, local, fake_backend):
+    """Review TASK 002, C5: `audio: true` must not let an audio item reach the queue (load, eviction) for d1-3B."""
+    fake_backend.downloaded.add(D1_3B)
+    config = AppConfig.model_validate({"engines": [{"id": "x", "kind": "mlx_local", "repo": D1_3B, "audio": True}]})
+    e = Registry(settings, Catalog(settings.probes_dir / "catalog.json"), config=config, local=local).get("x")
+    (settings.data_dir / "media" / "call.wav").write_bytes(b"RIFF")
+    req = DecisionRequest(state=None, questions=CORE["questions"], media=[{"type": "audio", "path": "call.wav"}])
+    r = await e.run(req, RunOptions())
+    assert r.request_failure == "refused" and "audio" in r.detail and not fake_backend.loads
+
+
+def test_rounded_predict_probabilities_are_rescaled_within_the_rounding_budget():
+    """Review TASK 002, C4: mlx-vlm's d1 `_answer` rounds to 4 places; a sharp 255-option choice then sums to about
+    0.998 and failed normalization (the probe would shrink max_choice_options, pointer passes would be lost)."""
+    from mlx_vlm.models.d1.d1 import _answer
+
+    from app.engines.base import ANSWER_NAMES, normalize_answer
+    from app.engines.mlx_local import unrounded
+
+    names = ANSWER_NAMES["mlx_decisions"]
+    options = {f"o{i:03d}": None for i in range(255)}
+    p = [6e-6] * 255
+    p[7] = 1 - 6e-6 * 254
+    raw = _answer({"type": "choice", "criteria": options}, p)
+    q = Question(type="choice", instructions="?", criteria=options)
+    assert normalize_answer(q, raw, names) == "invalid_answer"  # the failure the review measured
+    a = normalize_answer(q, unrounded(raw), names)
+    assert a.top == "o007" and abs(sum(a.probabilities.values()) - 1) < 1e-9
+    bad = {**raw, "probabilities": {k: v * 0.9 for k, v in raw["probabilities"].items()}}
+    assert normalize_answer(q, unrounded(bad), names) == "invalid_answer"  # a sum off by 0.1 is no rounding
+
+
+def test_a_valid_folder_makes_the_engine_available(settings, local, fake_backend, tmp_path):
+    (tmp_path / "d1").mkdir()
+    (tmp_path / "d1" / "config.json").write_text("{}")
+    config = AppConfig.model_validate({"engines": [
+        {"id": "x", "kind": "mlx_local", "repo": D1_3B, "path": str(tmp_path / "d1")}]})
+    e = Registry(settings, Catalog(settings.probes_dir / "catalog.json"), config=config, local=local).get("x")
+    assert e.available() == (True, "ok")

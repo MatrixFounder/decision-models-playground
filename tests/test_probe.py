@@ -725,7 +725,7 @@ def test_a_local_precheck_refusal_reads_as_not_served(client, fake_backend, monk
     """mlx-vlm's question checks run before the queue (precheck): their refusal is a 400 for the probe too."""
     from tests.conftest import mlx_check
 
-    def validate(questions):
+    def validate(questions, api="system_one"):
         if any(q["type"] == "date" for q in questions.values()):
             raise ValueError("question 'q': a date is not served by this checkpoint")
         mlx_check(questions)

@@ -1,4 +1,4 @@
-"""P0 spike: OpenRouter Decisions and chat completions (docs/TASK.md §8.1 P0; docs/ARCHITECTURE.md §3.5.3, §3.9; WI-1).
+"""P0 spike: OpenRouter Decisions and chat completions (docs/tasks/task-001-decision-models-playground-v1.md §8.1 P0; docs/ARCHITECTURE.md §3.5.3, §3.9; WI-1).
 
 Without a key (public):
 - GET /api/v1/models?output_modalities=decisions  -> tests/fixtures/openrouter/catalog_decisions.json

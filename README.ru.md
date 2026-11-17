@@ -6,7 +6,7 @@
 (вероятности, задержка, цена, снимок модели) ложатся рядом. Плюс локальный сервер `POST /v1/systemone`, через который
 стенд whip-insight подключает d1-модели, работающие на Mac.
 
-> **Статус (2026-11-09).** Инкременты P0–P6 выполнены ([TASK 001](docs/TASK.md)):
+> **Статус (2026-11-09).** Инкременты P0–P6 выполнены ([TASK 001](docs/tasks/task-001-decision-models-playground-v1.md)):
 >
 > - Workbench, история и дневной бюджет с облачными моделями OpenRouter и локальными d1 (MLX);
 > - compat-сервер `/v1/systemone` для whip-insight;
@@ -56,11 +56,23 @@ Decision-модель (Jev от TypeSafe, d1 от Liquid AI, Microsoft-Decision-
 | Движок | Модели | Где работает | Статус |
 |---|---|---|---|
 | `openrouter_decisions` | `typesafe/jev-1.14`, `liquid/d1.1`, `~liquid/d1-latest` и другие из каталога | OpenRouter Decisions API, ZDR по умолчанию | готов |
-| `mlx_local` | `LiquidAI/d1-2B-MLX-8bit`, `LiquidAI/d1-Omni-2B-MLX-8bit` | в процессе на Mac, `mlx-vlm >= 0.7.11`, одна модель в памяти | готов |
+| `mlx_local` | `LiquidAI/d1-2B-MLX-8bit`, `LiquidAI/d1-Omni-2B-MLX-8bit`, `LiquidAI/d1-3B-MLX-fp16` | в процессе на Mac, `mlx-vlm >= 0.7.11`, одна модель в памяти; из HF-кэша или из папки модели (`path`) | готов |
 | `systemone_http` | Ollama `d1`, `d1:2b`; `llama-server` с d1-3B-GGUF; свой compat-сервер | локальные серверы с `/v1/systemone` | план (WI-1) |
 | `openrouter_llm` | список LLM в `config.yaml` | OpenRouter chat completions; `logprobs` или словесная уверенность | план (WI-1) |
 
 Запланированные виды можно оставить в `config.yaml`: реестр покажет их недоступными.
+
+d1-3B вызывается через API `predict` из mlx-vlm, а не `system_one`; движок выбирает API по `config.json` модели. Она
+отвечает на `noul`, `choice`, `score` по тексту и картинкам; `multi`, `text`, `number`, `date` для неё —
+`unsupported`, запрос с аудио — `refused`. Модель, уже скачанную в другое место (LM Studio), движок читает из её папки:
+
+```yaml
+  - id: mlx-d1-3b
+    kind: mlx_local
+    repo: LiquidAI/d1-3B-MLX-fp16                     # имя модели в UI, записях и ответах compat
+    path: ~/.lmstudio/models/LiquidAI/d1-3B-MLX-fp16  # без него — HF-кэш (make models)
+    context_tokens: 32768
+```
 
 ## Что нужно
 
@@ -108,7 +120,7 @@ Windows ничего не запускалось.
 ```bash
 make setup     # .venv, зависимости (+ requirements-mlx.txt на Apple Silicon), .env и config.yaml из примеров
 $EDITOR .env   # OPENROUTER_API_KEY; права 600
-make models    # скачать d1-2B и d1-Omni (8-bit MLX, ~4.6 ГБ) в HF_HOME
+make models    # скачать включённые MLX-модели из config.yaml в HF_HOME (d1-2B, d1-Omni ~4.6 ГБ; d1-3B fp16 6.25 ГБ = 5.8 ГиБ)
 make check     # какие движки готовы, каталог, расход за сегодня
 make run       # UI http://127.0.0.1:8790 и compat-сервер :8791
 make test      # тесты без сети, ключей и моделей
@@ -157,7 +169,7 @@ make test      # тесты без сети, ключей и моделей
 | Команда | Что делает |
 |---|---|
 | `make setup` | Создать `.venv`, поставить зависимости (+ MLX на Apple Silicon), создать `.env` и `config.yaml` из примеров |
-| `make models` | Скачать две 8-bit MLX-модели в `HF_HOME` |
+| `make models` | Скачать `repo` каждого включённого движка `mlx_local` без `path` в `HF_HOME` |
 | `make run` / `make run-compat` | UI и compat-сервер на переднем плане / только compat-сервер |
 | `make run-bg` / `make stop` | То же в фоне (журнал `/tmp/decision-playground.log`) / остановить |
 | `make check` | Доступность каждого движка, кэш каталога, расход за сегодня |
@@ -203,7 +215,7 @@ make test      # тесты без сети, ключей и моделей
 | Документ | Содержание |
 |---|---|
 | [docs/manuals/user-guide.ru.md](docs/manuals/user-guide.ru.md) | Руководство пользователя: экраны, задачи, контекст локальных моделей, compat-сервер, неполадки ([English](docs/manuals/user-guide.md)) |
-| [docs/TASK.md](docs/TASK.md) | TASK 001: цели, решения владельца, сценарии, требования, приёмка P0–P6, риски |
+| [task-001](docs/tasks/task-001-decision-models-playground-v1.md) | TASK 001: цели, решения владельца, сценарии, требования, приёмка P0–P6, риски |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Компоненты, модель данных, движки, интерфейсы, безопасность, надёжность, настройка, тесты |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | Work-items; WI-1 — план P7 |
 | [docs/SPIKE.md](docs/SPIKE.md) | Спайк P0: замеры mlx-vlm, OpenRouter Decisions и чата (на русском) |

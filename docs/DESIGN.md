@@ -2,7 +2,7 @@
 
 > **Retired on 2026-11-09.** This document was split into:
 >
-> - [TASK.md](TASK.md) — TASK 001: goals, owner decisions, scope, use cases, requirements, acceptance
+> - [task-001](tasks/task-001-decision-models-playground-v1.md) — TASK 001: goals, owner decisions, scope, use cases, requirements, acceptance
 >   records of P0–P6, risks;
 > - [ARCHITECTURE.md](ARCHITECTURE.md) — components, engines, data model, interfaces, security,
 >   reliability, configuration, tests;

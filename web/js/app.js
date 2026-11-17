@@ -1,4 +1,4 @@
-// Wiring: tabs, the draft, engines, estimate, run over SSE, budget, language (TASK §6.5).
+// Wiring: tabs, the draft, engines, estimate, run over SSE, budget, language (TASK 001 §6.5).
 
 import * as api from './api.js';
 import { DatasetsView } from './datasets.js';

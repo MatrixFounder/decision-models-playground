@@ -570,3 +570,60 @@ def test_a_body_too_deep_for_json_is_a_400(client):
     body = b'{"state": ' + b"[" * 200000 + b"]" * 200000 + b"}"
     r = client.post("/v1/systemone", content=body, headers={"Content-Type": "application/json"})
     assert r.status_code in (400, 413) and r.headers["content-type"].startswith("application/json")
+
+
+# --- TASK 002: a `predict` engine (d1-3B) behind the compat server ------------------------------------------------------
+
+from app.engines.mlx_local import system_one_answers  # noqa: E402
+from tests.conftest import D1_3B  # noqa: E402
+
+
+def test_system_one_answers_maps_the_mlx_decisions_names():
+    out = system_one_answers({
+        "n": {"type": "bool", "value": True, "probability": 0.9},
+        "c": {"type": "choice", "value": "b", "probabilities": {"a": 0.2, "b": 0.8}, "metadata": {"confidence": 0.8}},
+        "s": {"type": "score", "value": 1.4, "probabilities": {"0": 0.1, "1": 0.4, "2": 0.5},
+              "metadata": {"confidence": 0.5, "legend": {"0": "нет", "1": "слабо", "2": "да"}}},
+    })
+    assert out == {
+        "n": {"type": "noul", "noul": 0.9},
+        "c": {"type": "choice", "choice": "b", "confidence": 0.8, "probabilities": {"a": 0.2, "b": 0.8}},
+        "s": {"type": "score", "score": 1.4, "confidence": 0.5, "probabilities": {"0": 0.1, "1": 0.4, "2": 0.5},
+              "legend": {"0": "нет", "1": "слабо", "2": "да"}},
+    }
+
+
+def test_d1_3b_answers_whip_insight_in_system_one_names(client, fake_backend):
+    fake_backend.downloaded.add(D1_3B)
+    r = client.post("/v1/systemone", json={**WI, "model": "mlx-d1-3b"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["model"] == D1_3B  # a folder model: the undated repo id, never the folder path
+    a = body["answers"]
+    assert a["std_refund_request"] == {"type": "noul", "noul": 0.9}
+    assert set(a["call_kind"]) == {"type", "choice", "confidence", "probabilities"}
+    assert set(a["satisfaction"]) == {"type", "score", "confidence", "probabilities", "legend"}
+    assert 0 <= a["satisfaction"]["score"] <= 2
+
+
+def test_d1_3b_gets_compat_pictures_as_pictures(client, fake_backend):
+    from PIL.Image import Image as PilImage
+
+    fake_backend.downloaded.add(D1_3B)
+    r = client.post("/v1/systemone", json={**WI, "model": "mlx-d1-3b", "images": [png()]})
+    assert r.status_code == 200, r.text
+    images = fake_backend.calls[0]["images"]
+    assert len(images) == 1 and isinstance(images[0], PilImage)
+
+
+def test_extended_types_outside_the_engines_profile_are_400_with_the_header(client, fake_backend):
+    fake_backend.downloaded.add(D1_3B)
+    multi = {"type": "choice", "multiple": True, "instructions": "?", "criteria": {"a": None, "b": None}}
+    body = {**WI, "model": "mlx-d1-3b", "questions": {**WI["questions"], "extra_q": multi}}
+    r = client.post("/v1/systemone", json=body, headers={"X-Playground-Extensions": "1"})
+    assert r.status_code == 400
+    assert r.json()["error"] == {"code": "unsupported_question_type", "type": "multi", "question": "extra_q"}
+    assert not fake_backend.calls and not fake_backend.loads
+    # d1-2B still takes it with the header
+    body["model"] = "mlx-d1-2b"
+    assert client.post("/v1/systemone", json=body, headers={"X-Playground-Extensions": "1"}).status_code == 200

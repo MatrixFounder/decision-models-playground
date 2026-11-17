@@ -69,11 +69,14 @@ ENGINES = [
     {"id": "or-no-zdr", "kind": "openrouter_decisions", "model": "liquid/d1.1", "zdr": False},
     {"id": "mlx-d1-2b", "kind": "mlx_local", "repo": "LiquidAI/d1-2B-MLX-8bit", "context_tokens": 32768},
     {"id": "mlx-d1-omni", "kind": "mlx_local", "repo": "LiquidAI/d1-Omni-2B-MLX-8bit", "audio": True},
+    {"id": "mlx-d1-3b", "kind": "mlx_local", "repo": "LiquidAI/d1-3B-MLX-fp16", "context_tokens": 32768},
     {"id": "ollama-d1-2b", "kind": "systemone_http", "base_url": "http://127.0.0.1:11434/v1/systemone"},
 ]
 UI = "http://127.0.0.1:8790"  # the only Host the UI trusts besides localhost (review P1: no testserver)
 D1_2B = "LiquidAI/d1-2B-MLX-8bit"
 D1_OMNI = "LiquidAI/d1-Omni-2B-MLX-8bit"
+D1_3B = "LiquidAI/d1-3B-MLX-fp16"  # the mlx-vlm `predict` family (TASK 002)
+D1_3B_IMAGE_TOKENS = 2916  # (max_tiles 10 + thumbnail) x 256 + 100, from d1-3B's config.json
 
 
 def load(rel: str) -> dict:
@@ -237,9 +240,60 @@ class FakeModel:
         return {"answers": answers, "usage": {"input_tokens": tokens, "output_tokens": 0}}
 
 
+def predict_check(questions: dict) -> None:
+    """The production checks of the `predict` family (app.local_models.predict_checks), which call mlx-vlm's own:
+    a copy here passed engine tests for the wrong reason (review TASK 002, T1)."""
+    _mlx_vlm_wanted.set()
+    from app.local_models import predict_checks
+
+    predict_checks(questions)
+
+
+class FakePredictModel:
+    """Answers like d1-3B's `predict` (mlx-vlm `models/d1`): `mlx_decisions` names, the output carries `model`.
+    It is called through the real `mlx_vlm.decision.predict`, so mlx-vlm's own checks run first."""
+
+    def __init__(self, repo: str, backend: FakeBackend):
+        self.repo, self.backend = repo, backend
+        from mlx_vlm.models.d1 import Model
+
+        self.decision_types, self.decision_media = Model.decision_types, Model.decision_media
+
+    def predict(self, processor, state, questions, images=None, token_budget=65536):
+        self.backend.thread_ids.add(threading.get_ident())
+        for k, q in questions.items():  # never `multiple`, never a media dict in instructions: our bugs, not d1's
+            if q.get("multiple") or not isinstance(q.get("instructions"), str):
+                raise AssertionError(f"question {k!r} reached d1-3B unchecked: {q}")
+        self.backend.calls.append({"repo": self.repo, "state": state, "questions": questions, "images": images})
+        if self.backend.call_delay:
+            time.sleep(self.backend.call_delay)
+        if self.backend.call_error:
+            raise self.backend.call_error
+        answers = {}
+        for k, q in questions.items():
+            t = q["type"]
+            if t in ("noul", "bool"):
+                answers[k] = {"type": "bool", "value": True, "probability": 0.9}
+            elif t == "choice":
+                ids = list(q["criteria"])
+                p = {i: 0.1 / (len(ids) - 1) for i in ids[1:]} | {ids[0]: 0.9}
+                answers[k] = {"type": "choice", "value": ids[0], "probabilities": {i: p[i] for i in ids},
+                              "metadata": {"confidence": 0.9}}
+            else:  # score
+                n = len(q["criteria"])
+                p = {str(i): (0.7 if i == n - 1 else 0.3 / (n - 1)) for i in range(n)}
+                answers[k] = {"type": "score", "value": sum(i * v for i, v in enumerate(p.values())),
+                              "probabilities": p, "metadata": {"confidence": 0.7, "legend": {
+                                  str(i): c for i, c in enumerate(q["criteria"])}}}
+        return {"model": f"/Users/someone/.lmstudio/models/{self.repo}", "answers": answers,
+                "usage": {"input_tokens": 382, "output_tokens": 0}}
+
+
 class FakeBackend:
     def __init__(self, downloaded=(D1_2B,)):
         self.downloaded = set(downloaded)
+        self.predict_repos: set[str] = {D1_3B}  # repos whose config.json names the `predict` family
+        self.folder_repos: set[str] = {D1_3B}  # read from a folder (`path`), as the owner's d1-3B: undated snapshot
         self.loads: list[str] = []
         self.unloads: list[str] = []
         self.calls: list[dict] = []
@@ -265,8 +319,12 @@ class FakeBackend:
             raise LoadError(f"{repo} is not downloaded")
         self.loads.append(repo)
         processor = type("P", (), {"tokenizer": FakeTokenizer()})()
-        return Loaded(repo=repo, model=FakeModel(repo, self), processor=processor, path=f"/fake/{repo}",
-                      revision="abc123", snapshot=f"{repo}-20261105", loaded_at=time.time(), load_ms=5)
+        api = self.info(repo).api
+        model = FakePredictModel(repo, self) if api == "predict" else FakeModel(repo, self)
+        folder = repo in self.folder_repos
+        return Loaded(repo=repo, model=model, processor=processor, path=f"/fake/{repo}",
+                      revision="local" if folder else "abc123", snapshot=repo if folder else f"{repo}-20261105",
+                      loaded_at=time.time(), load_ms=5, api=api)
 
     def unload(self, loaded):
         self.thread_ids.add(threading.get_ident())
@@ -284,11 +342,18 @@ class FakeBackend:
             raise self.tokenizer_error
         return len(text) * self.tokens_per_char if self.tokens_per_char else len(FakeTokenizer().encode(text))
 
-    def set_size(self, repo):
-        return 16  # d1-2B's and d1-Omni's config.json
+    def info(self, repo):
+        from app.local_models import ModelInfo
 
-    def validate(self, questions):
-        mlx_check(questions)
+        if repo in self.predict_repos:  # d1-3B's config.json
+            return ModelInfo(api="predict", set_size=1, image_tokens=D1_3B_IMAGE_TOKENS)
+        return ModelInfo(api="system_one", set_size=16)  # d1-2B's and d1-Omni's config.json
+
+    def set_size(self, repo):
+        return self.info(repo).set_size
+
+    def validate(self, questions, api="system_one"):
+        predict_check(questions) if api == "predict" else mlx_check(questions)
 
 
 @pytest.fixture

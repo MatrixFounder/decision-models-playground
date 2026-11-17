@@ -1,21 +1,22 @@
 # Decision Models Playground — Architecture
 
-> **Status.** The system as implemented through increment P6 (2026-11-09). P7 is not started; its scope is work-item
+> **Status.** The system as implemented through increment P6 (2026-11-09), plus TASK 002 (2026-11-17): d1-3B through
+> mlx-vlm's `predict` API and model folders outside the Hugging Face cache. P7 is not started; its scope is work-item
 > WI-1 in [BACKLOG.md](BACKLOG.md).
 >
 > **Scope.** Structure, data, interfaces and runtime behaviour. Requirements, use cases and requirement risks
-> (RQ-1…RQ-13) are in [TASK.md](TASK.md). Measurements come from [SPIKE.md](SPIKE.md) and [reviews/](reviews/).
+> (RQ-1…RQ-13) are in [task-001](tasks/task-001-decision-models-playground-v1.md), RQ-14…RQ-17 in [TASK 002](TASK.md). Measurements come from [SPIKE.md](SPIKE.md) and [reviews/](reviews/).
 > Every statement was checked against the P6 code; a `path:line` reference is followed by the symbol it names.
 
 ## 1. Task Description
 
-Requirements: [TASK 001](TASK.md). A decision model reads a state (text, JSON, pictures, audio for d1-Omni) and
+Requirements: [TASK 001](tasks/task-001-decision-models-playground-v1.md) and [TASK 002](TASK.md) (d1-3B). A decision model reads a state (text, JSON, pictures, audio for d1-Omni) and
 answers closed questions with probabilities. The playground runs such models side by side on one Mac.
 
 | Goal | One line |
 |---|---|
 | G1 | Compare and calibrate: one call, one question set, several models' probabilities; thresholds from a labelled set |
-| G2 | Local runtime for whip-insight: d1-2B and d1-Omni-2B on the Mac, served as `POST /v1/systemone` |
+| G2 | Local runtime for whip-insight: d1-2B, d1-3B and d1-Omni-2B on the Mac, served as `POST /v1/systemone` |
 | G3 | New d1 capabilities: audio input, typed extraction with `span`, multiple choice |
 | G4 | Decision model against an ordinary LLM: agreement, cost, latency on the same question |
 
@@ -30,7 +31,7 @@ G4 has no implementation in P0–P6. The engine kinds it needs are registered as
 
 ### 2.1. Functional Components
 
-Use case ids are those of [TASK.md](TASK.md): UC-1 compare run, UC-2 experiments, UC-3 datasets and calibration,
+Use case ids are those of [task-001](tasks/task-001-decision-models-playground-v1.md): UC-1 compare run, UC-2 experiments, UC-3 datasets and calibration,
 UC-4 capability probe and matrix, UC-5 compat server, UC-6 audio, UC-7 extraction, UC-8 turn pointer.
 
 | Id | Component | Functions: input → output | Use cases | Depends on |
@@ -60,7 +61,7 @@ UC-4 capability probe and matrix, UC-5 compat server, UC-6 audio, UC-7 extractio
 - Persistent state is JSON, JSONL and YAML files under `DATA_DIR`. There is no database server.
 - The browser UI is static ES modules served by the same process, without a build step.
 
-**Why.** One user works on one Mac ([TASK.md](TASK.md)). The UI and the compat server share one local model: d1-2B
+**Why.** One user works on one Mac ([task-001](tasks/task-001-decision-models-playground-v1.md)). The UI and the compat server share one local model: d1-2B
 takes 2.06 GB and d1-Omni 2.53 GB after load, plus about 1.1 GB of MLX cache ([SPIKE.md](SPIKE.md) §2.3). Two
 processes would hold two copies or need an IPC layer. The OpenRouter Decisions API is alpha (RQ-4): one adapter per
 provider keeps a change of its shape inside one module.
@@ -289,40 +290,69 @@ Cost:
 #### 3.5.4. `mlx_local`
 
 - Runs in process through `mlx-vlm ≥ 0.7.11`; every MLX operation goes through `LocalModels` (§3.6).
-- Default profile: all seven types; 255 options; 10 levels; media `image`, plus `audio` when `audio: true`.
-- Calls `model.system_one(state, questions, media, score_readout="mean")`; `expected` is computed from
-  `probabilities` anyway.
+- The model's `config.json` names one of two mlx-vlm decision APIs (`decision_api`, `app/local_models.py`). The rule
+  is the one of mlx-vlm's `get_model_type`.
+
+| API family | `config.json` | Models | mlx-vlm model type |
+|---|---|---|---|
+| `system_one` | any other | d1-2B, d1-Omni-2B | `d1_lfm3_vl`, `d1_lfm3_omni` |
+| `predict` | `model_type: lfm2_vl` and `auto_map.AutoModel` ending in `D1Model` | d1-3B (fp16, 8-bit, 4-bit) | `d1` |
+
+| | `system_one` | `predict` |
+|---|---|---|
+| Default profile | all seven types; 255 options; 10 levels; `image`, plus `audio` when `audio: true` | `noul`, `choice`, `score`; 255 options; 10 levels; `image` |
+| Call | `model.system_one(state, questions, media, score_readout="mean")` | `mlx_vlm.decision.predict(model, processor, state, questions, images=…)` |
+| Question sent | `d1_question()`: type, instructions, criteria, `multiple`, `range`, `step`, `unit` | type, instructions, criteria |
+| Answer names (§3.5.6) | `system_one` | `mlx_decisions` |
+| Stored `raw` | the output | the output without `model` (a local path) |
+| Questions per counted row | `d1_set_size` from `config.json` (default 4) | 1: the state is read once, each question is its own branch |
+| Picture allowance | `D1_VISION_MAX_PIXELS / 1024 + 100` (about 1 700) | `(max_tiles + 1) × max_image_tokens + 100`, the higher limits of `config.json` and `processor_config.json` (2 916) |
+| Probabilities | as the model gives them | rounded to 4 places by mlx-vlm; `unrounded()` rescales a sum within 0.001 + n × 5e-5 before normalization and in compat answers; `raw` keeps mlx-vlm's figures |
+
+- `expected` of a `score` is computed from `probabilities` in both families.
+- An audio item is `refused` for a `predict` model also with `audio: true` (`media_items`).
 - Cost is 0 (`cost_source: none`); `input_tokens` comes from the model's `usage`.
 - `latency_ms` is the model call alone; `timings` holds `queue_ms`, `load_ms`, `call_ms`.
-- Snapshot: `<repo>-<YYYYMMDD>` from the commit date of the cached revision, else the undated repo id (§3.6).
+- Snapshot: `<repo>-<YYYYMMDD>` from the commit date of the cached revision, else the undated repo id. A model
+  folder (`path`, §3.6) has the undated repo id.
 
 Request handling, in order:
 1. A question whose `instructions` is not a string becomes `unsupported` and is not sent.
 2. Each media item must resolve to a file under `DATA_DIR/media`; audio on a model without `audio: true` is
    `refused`.
-3. `precheck()` before the queue (`app/engines/mlx_local.py:232`):
-   1. mlx-vlm's own question checks (`check_question`, `as_question`), on a worker thread;
+3. `precheck()` before the queue (`MlxLocal.precheck`):
+   1. the family's question checks on a worker thread (`MlxBackend.validate`):
+      - `system_one`: mlx-vlm's `check_question`, `as_question`;
+      - `predict`: a `choice` with `multiple` is refused; then mlx-vlm's `decision.predict` checks run against a
+        stand-in model with the class's `decision_types`, and `as_question` of `mlx_vlm.models.d1.prompt`;
    2. JSON depth ≤ 32, and the rendered length, computed without rendering, ≤ 16 × `context_tokens`;
-   3. on a worker thread: the rendered state plus the heaviest group of `d1_set_size` questions, escaped, counted.
+   3. on a worker thread: the rendered state plus the heaviest group of questions, escaped, counted.
 4. The call goes through `LocalModels.call(repo, …, wait_s=timeout_s)`.
+5. `invoke()` dispatches on `Loaded.api`, the family of the model actually loaded. The `predict` branch refuses
+   `multiple` and any non-picture media item once more.
 
 Counting rules of step 3.3:
 - The state is rendered as mlx-vlm renders it: a string as is, other JSON with `indent=2`.
-- Text is escaped as mlx-vlm's `plain()` escapes it; `<|pad|>` is 1 token raw and 5 escaped.
-- The model's `tokenizer.json` counts tokens without loading the model; `d1_set_size` comes from `config.json`
-  (default 4).
-- Allowances: 32 tokens per question, 4 per option, 500 per audio clip. A picture takes
-  `D1_VISION_MAX_PIXELS / 1024 + 100` tokens, about 1 700 by default.
+- Text is escaped as mlx-vlm's `plain()` escapes it; `<|pad|>` is 1 token raw and 5 escaped. The `predict` prompt
+  does not escape (RQ-15, [TASK 002](TASK.md)): there the escaped count is an upper bound.
+- The model's `tokenizer.json` counts tokens without loading the model; the group size and the picture allowance
+  come from `config.json` (table above).
+- Allowances: 32 tokens per question, 4 per option, 500 per audio clip, the family's picture allowance.
 - A count above `context_tokens` (default 32 768) is `too_long`.
 
-**Why.** A JSON state of depth 32 and 0.5 M compact characters rendered to 11.8 M characters and +1.3 GB before a
-later check refused it ([reviews/r3-response.md](reviews/r3-response.md)). A refused request must not load or evict a
-model. `tests/test_mlx_backend.py` checks on the real tokenizer that the count is not below mlx-vlm's row.
+**Why.**
+- A JSON state of depth 32 and 0.5 M compact characters rendered to 11.8 M characters and +1.3 GB before a later
+  check refused it ([reviews/r3-response.md](reviews/r3-response.md)). A refused request must not load or evict a
+  model. `tests/test_mlx_backend.py` checks on the real tokenizer that the count is not below mlx-vlm's row.
+- `predict` answers a `choice` with `multiple: true` as a single choice, with no error ([TASK 002](TASK.md) §7).
+- d1-3B's processor splits a picture into up to 10 tiles of 256 tokens plus a 256-token thumbnail. Over 20 shapes
+  a picture took 66 to 2 829 tokens ([TASK 002](TASK.md) §7). The d1-2B allowance of 1 700 is below that.
 
 Failure mapping (§4.2):
 - a missing manager or a `LoadError`, an unreadable `tokenizer.json` included, gives `unreachable`;
 - a count over the limit, or running out of memory while counting, gives `too_long`;
-- an mlx-vlm capability refusal (`CAPABILITY_REFUSAL`) gives `refused` with `http_status` 400;
+- an mlx-vlm capability refusal (`CAPABILITY_REFUSAL`) gives `refused` with `http_status` 400. It matches a message
+  that starts with `question '` or `this checkpoint takes no `, as the checks of step 3.1 and `invoke()` write them;
 - `Busy` gives `rate_limited`; `WaitTimeout` gives `timed_out`; any other error gives `provider_error`.
 
 #### 3.5.5. Registry and Availability
@@ -335,7 +365,7 @@ settings, catalog, budget config, local manager, probe store.
 | Kind | Available when |
 |---|---|
 | `openrouter_decisions` | `enabled`; `model` set; `OPENROUTER_API_KEY` set |
-| `mlx_local` | `enabled`; `repo` set; macOS on arm64; mlx-vlm ≥ 0.7.11; manager running; model in the HF cache |
+| `mlx_local` | `enabled`; `repo` set; macOS on arm64; mlx-vlm ≥ 0.7.11; manager running; `path` a folder with `config.json` when set, else the model in the HF cache |
 | `systemone_http`, `openrouter_llm` | never; reason `engine kind … arrives in P7` |
 | any other kind | never; reason `unknown engine kind` |
 
@@ -346,7 +376,7 @@ it is refused with 400 before streaming.
 
 `ANSWER_NAMES` (`app/engines/base.py:32`) maps internal fields to provider fields.
 
-| Internal | `system_one` (OpenRouter, mlx-vlm `system_one`) | `mlx_decisions` (mlx-vlm `/v1/decisions`, unused) |
+| Internal | `system_one` (OpenRouter, mlx-vlm `system_one`) | `mlx_decisions` (mlx-vlm `decision.predict`, `/v1/decisions`) |
 |---|---|---|
 | P(true) of `noul` | `noul` | `probability` |
 | chosen option | `choice` | `value` |
@@ -354,8 +384,11 @@ it is refused with 400 before streaming.
 | vendor confidence | `confidence` | `metadata.confidence` |
 | score level / legend | `score` / `legend` | `value` / `metadata.legend` |
 
-Both implemented engines read with `system_one`. Extension answers are read by fixed names: `probabilities`, `found`,
-`span`, `interval`, `text`, `unit`, and the type's own value field.
+`openrouter_decisions` and the `system_one` family of `mlx_local` read with `system_one`. The `predict` family of
+`mlx_local` reads with `mlx_decisions`. Its `noul` answer has type `bool`, `value` and `probability`; its `score`
+`value` is the probability-weighted level. The compat server converts `mlx_decisions` answers back to System One
+names (`system_one_answers`, §5.3). Extension answers are read by fixed names: `probabilities`, `found`, `span`,
+`interval`, `text`, `unit`, and the type's own value field.
 
 #### 3.5.7. Planned Kinds
 
@@ -409,12 +442,18 @@ Rules:
 
 | `MlxBackend` operation | Behaviour |
 |---|---|
-| `load` | `snapshot_download(local_files_only=True)`, `mlx_vlm.load`; requires `system_one`; warms audio for audio models |
+| `load` | The folder, else `snapshot_download(local_files_only=True)`; `mlx_vlm.load`; requires the method of the family that `config.json` names (`system_one`, or `predict` with `decision_types`); sets `Loaded.api`; warms audio for `system_one` audio models |
 | `unload` | Drops references, clears mlx-vlm tokenizer caches, `gc.collect()`, `mx.clear_cache()` |
 | snapshot date | `HfApi().model_info(repo, revision, timeout=5).last_modified`, cached in `probes/local_snapshots.json` |
 | `disk_gb` | Size of the cached snapshot, cached 60 s; `None` when not downloaded |
-| `count_tokens`, `set_size`, `validate` | `tokenizer.json`, `config.json`, mlx-vlm question checks; no model load |
+| `info` | From `config.json` and `processor_config.json`: the API family, the questions per counted row, the picture allowance (§3.5.4). Kept once read. A failed read gives the `system_one` defaults; it is kept 60 s for the HF cache, never for a folder; `load` always re-reads a failure |
+| `count_tokens`, `set_size`, `validate` | `tokenizer.json`, `info`, the family's question checks; no model load |
 
+- An `mlx_local` engine with `path` reads that folder instead of the HF cache (`local_folders`, `app/local_models.py`).
+  `~` is expanded; a relative path is resolved against the repository root. `repo` stays the model's name.
+- Two `mlx_local` engines with one `repo` and different sources (two folders, or a folder and the HF cache) stop the
+  start with `ValueError`.
+- A folder model has revision `local` and the undated repo id as its snapshot: a folder carries no commit.
 - A model is never downloaded implicitly; `make models` downloads.
 - Offline, or with `HF_HUB_OFFLINE` set, the snapshot stays undated; a failed date lookup is not repeated.
 - A failed audio warm-up is logged and does not fail the load.
@@ -423,6 +462,10 @@ Rules:
 **Why.**
 - MLX streams are tied to a thread, so all MLX work runs on one thread (`app/local_models.py:10-11`); a test checks
   the thread identity ([reviews/p2-response.md](reviews/p2-response.md)).
+- Every lazy import of an mlx-vlm module goes through `mlx_vlm_import()` under one process-wide lock; `load` imports
+  the model's own `mlx_vlm.models.<type>` that way before `mlx_vlm.load`. Two threads importing mlx-vlm for the first
+  time through different modules deadlocked on its circular package imports, 5 of 5 fresh processes
+  ([reviews/t002-acceptance.md](reviews/t002-acceptance.md)). An `ImportError` becomes a `LoadError` naming the module.
 - Load takes 1.3–1.7 s ([SPIKE.md](SPIKE.md) §2.3). A FIFO queue alternating two models reloads at each switch; two
   8-bit models plus cache leave no room for a long state.
 - A 27 765-token state peaked at 5.65–6.11 GB; 64 K tokens were forecast at about 20 GB on a 24 GB Mac
@@ -937,13 +980,15 @@ The compat app listens on `COMPAT_HOST:COMPAT_PORT` (default `127.0.0.1:8791`). 
 | Body | `{model?, state, questions, images?}`; other fields ignored; `media` refused (OQ-A4) |
 | `model` | An `mlx_local` engine id; absent → `compat.default_model` |
 | `questions` | 1–64 (`compat.max_questions`); keys by the key pattern; `instructions` non-empty text |
-| Types | `noul`, `choice`, `score`; extension types only with the header value `1` |
+| Types | `noul`, `choice`, `score`; extension types only with the header value `1` and in the engine's default profile |
 | `state` | string, JSON object or array; required unless `images` is present; depth ≤ 32 |
 | `images` | ≤ 4 base64 strings; PNG, JPEG or WebP; ≤ 16 MP by header, before decoding |
 | 200 body | `{id: "so-<ULID>", model: <snapshot>, provider: "local-mlx", answers, usage}` |
 | `usage` | `{input_tokens, output_tokens: 0, cost: 0}` |
 
-- `answers` are mlx-vlm's System One answers with `score_readout="mean"`, converted to plain JSON.
+- `answers` are mlx-vlm's System One answers with `score_readout="mean"`, converted to plain JSON. A `predict`
+  model's answers are converted to System One names first (`system_one_answers`): `bool` → `noul`; `value` →
+  `choice` or `score`; `metadata.confidence` → `confidence`; `metadata.legend` → `legend`.
 - Check order: Host, `Origin`, token (POST), `Content-Length`, streamed size, JSON parse (worker thread), model and
   availability, questions, state, images, `media`.
 - Then: the 1-token-per-character estimate of the compact state and the heaviest question group (worker thread),
@@ -1023,8 +1068,8 @@ The playground writes nothing into whip-insight. Reachability of `*.local` from 
 | mlx-vlm | `>=0.7.11` in `requirements-mlx.txt`, Apple Silicon only; 0.7.12 installed |
 | mlx, huggingface_hub, tokenizers, numpy | in `requirements-mlx.txt`, versions set by mlx-vlm; imported lazily on the local path |
 
-**Why.** The stack follows the owner's decision D-4 in [TASK.md](TASK.md). LM Studio did not load d1-Omni
-([TASK.md](TASK.md), "Why not LM Studio"). Both d1 MLX checkpoints answer through mlx-vlm's in-process `system_one`
+**Why.** The stack follows the owner's decision D-4 in [task-001](tasks/task-001-decision-models-playground-v1.md). LM Studio did not load d1-Omni
+([task-001](tasks/task-001-decision-models-playground-v1.md), "Why not LM Studio"). Both d1 MLX checkpoints answer through mlx-vlm's in-process `system_one`
 method ([SPIKE.md](SPIKE.md) §2.1).
 
 ### 6.2. Frontend, Storage, Tools
@@ -1298,7 +1343,7 @@ is ignored with a warning) and `HF_HUB_OFFLINE` (no snapshot date lookups).
 | Section | Keys (defaults) |
 |---|---|
 | `engines[]` | `id`, `kind`, `model`, `repo`, `base_url`, `enabled` (true), `zdr` (true), `max_request_bytes` |
-| `engines[]` | `concurrency` (4), `timeout_s` (30), `context_tokens`, `audio` (false), `mode` |
+| `engines[]` | `concurrency` (4), `timeout_s` (30), `context_tokens`, `audio` (false), `mode`, `path` (`mlx_local` only) |
 | `budget` | `tokens_per_char` (1.5), `overhead_tokens` (200), `fallback_price_per_mtok` (0.2) |
 | `local` | `max_loaded_models` (1, the only value), `idle_unload_s` (600), `max_waiting` (8) |
 | `compat` | `default_model`, `max_questions` (64), `max_body_mb` (6), `max_images` (4), `max_image_pixels` (16 000 000) |
@@ -1306,8 +1351,8 @@ is ignored with a warning) and `HF_HUB_OFFLINE` (no snapshot date lookups).
 | `audio` | `max_seconds` (30, ≤ 600), `sample_rate` (16000 only) |
 
 `config.example.yaml`:
-- lists three OpenRouter engines, two `mlx_local` engines (`context_tokens: 32768`), and disabled `systemone_http`
-  and `openrouter_llm` entries;
+- lists three OpenRouter engines, three `mlx_local` engines (`context_tokens: 32768`; `mlx-d1-3b` with a commented
+  `path`), and disabled `systemone_http` and `openrouter_llm` entries;
 - sets the `budget`, `local`, `compat` and `audio` sections to the defaults above.
 
 `AppConfig` accepts unknown top-level sections (`extra="allow"`) and reads none of them. The calibration target (0.9)
@@ -1319,7 +1364,7 @@ and thresholds (0.50–0.99) are constants in `app/metrics.py`. Experiment defau
 | Target | Action |
 |---|---|
 | `setup` | Create `.venv`; install requirements (+ mlx on macOS arm64); create `.env` (mode 600) and `config.yaml` |
-| `models` | Download `LiquidAI/d1-2B-MLX-8bit` and `LiquidAI/d1-Omni-2B-MLX-8bit` into the HF cache |
+| `models` | `scripts/download_models.py`: download the `repo` of every enabled `mlx_local` engine without `path` into the HF cache |
 | `run` / `run-compat` | `python -m app` / `python -m app --compat-only`, foreground |
 | `run-bg` / `stop` | Background run with a log file / kill what listens on both ports |
 | `check` | `python -m app.check`: engines, catalog (refreshed when stale), today's budget |
@@ -1368,7 +1413,7 @@ question checks (`tests/conftest.py` `mlx_check`).
 | Contract | `test_schemas.py`, `test_normalize.py` | Request validation; P0 answers → `Answer`; bad answers → `invalid_answer` |
 | Cloud engine | `test_openrouter_engine.py`, `test_base_url.py` | Failure classes via `httpx.MockTransport`; base-URL rule |
 | Local engine | `test_mlx_engine.py`, `test_local_models.py` | Engine over a fake MLX; queue, eviction, idle unload, cancels, MLX thread |
-| MLX backend | `test_mlx_backend.py` | Load, unload, snapshot dates with fakes; count ≥ mlx-vlm's row on the real tokenizer |
+| MLX backend | `test_mlx_backend.py` | Load, unload, snapshot dates, API family, folders with fakes; count ≥ mlx-vlm's row on the real tokenizer (both families) |
 | Compat | `test_compat.py` | whip-insight request fixture, type 400, token, Host, Origin, limits, error codes |
 | API and runs | `test_api.py`, `test_store.py`, `test_budget.py` | SSE, records, index, durable writes, reconcile, guards, budget |
 | Batch | `test_dataset_run.py`, `test_experiments.py` | Lanes, budget stop, unsaved charges, records without call text |
@@ -1380,7 +1425,8 @@ question checks (`tests/conftest.py` `mlx_check`).
 | Frontend | `tests/js/*.test.mjs` (9 files) | SSE reader, editor, draft, stream handler, results, datasets, experiments, matrix |
 
 Skips: `test_media.py` without ffmpeg or a codec; `test_synth_neutral.py` without a whip-insight checkout
-(`WHIP_INSIGHT` or `../whip-insight`); the real-tokenizer tests without d1-2B in the HF cache.
+(`WHIP_INSIGHT` or `../whip-insight`); the real-tokenizer tests without d1-2B in the HF cache; the d1-3B tests without
+a d1-3B folder (`D1_3B_PATH`, else the HF cache, else `~/.lmstudio/models/LiquidAI/d1-3B-MLX-fp16`).
 
 Fixtures: `tests/fixtures/openrouter/` and `mlx/` (P0 recordings without keys), `audio/` (synthetic clips),
 `requests/` (`core_ru`, `extensions_ru`, `whip_insight_systemone`, `whip_insight_windows`).
@@ -1391,7 +1437,7 @@ Outside `make test`: `make smoke-local` runs the real mlx-vlm, models and tokeni
 
 ## 12. Open Questions
 
-Architecture-level questions only. Requirement risks are RQ-1…RQ-13 in [TASK.md](TASK.md); this design addresses
+Architecture-level questions only. Requirement risks are RQ-1…RQ-13 in [task-001](tasks/task-001-decision-models-playground-v1.md) and RQ-14…RQ-17 in [TASK 002](TASK.md); this design addresses
 RQ-3 (§3.10), RQ-4 (§3.1), RQ-6 (§5.5), RQ-9 (§3.5.3) and RQ-10 (§3.6).
 
 - **OQ-A1** — Should record saves (`F_FULLFSYNC`), probe profile writes and dataset parsing move off the event loop

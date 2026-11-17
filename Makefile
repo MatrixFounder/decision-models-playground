@@ -20,7 +20,7 @@ TAG          ?= std_answering_machine
 
 help:
 	@echo "make setup            - create .venv, install requirements (+ requirements-mlx.txt on Apple Silicon)"
-	@echo "make models           - download the enabled MLX models into HF_HOME"
+	@echo "make models           - download the enabled MLX models of config.yaml into HF_HOME (not those with path:)"
 	@echo "make run              - UI and /api on http://127.0.0.1:$(PORT) plus the compat server :8791 (foreground)"
 	@echo "make run-compat       - only the compat server POST /v1/systemone (for whip-insight)"
 	@echo "make run-bg / stop    - the same in the background (log $(LOG)) / stop it"
@@ -49,7 +49,7 @@ setup: $(PY)
 	@echo "==> setup complete"
 
 models: $(PY)
-	@$(PY) -c "from huggingface_hub import snapshot_download as d; [print(d(r)) for r in ('LiquidAI/d1-2B-MLX-8bit', 'LiquidAI/d1-Omni-2B-MLX-8bit')]"
+	@$(PY) scripts/download_models.py
 
 run: $(PY)
 	@$(PY) -m app

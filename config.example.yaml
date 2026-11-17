@@ -15,6 +15,8 @@
 #   timeout_s          deadline of one call (default 30); for a local engine also the longest wait in its queue
 #   context_tokens     local engines: prompt limit in tokens, rendered state plus questions (default 32768)
 #   audio              mlx_local: the model hears audio (d1-Omni only)
+#   path               mlx_local: a model folder read instead of the Hugging Face cache (LM Studio,
+#                      `hf download --local-dir`); `~` expanded, relative to the repository; `repo` still names the model
 #   mode               openrouter_llm: auto | logprobs | verbal (planned, WI-1)
 
 engines:
@@ -47,6 +49,13 @@ engines:
     repo: LiquidAI/d1-Omni-2B-MLX-8bit  # fp16: LiquidAI/d1-Omni-2B-MLX-fp16
     context_tokens: 32768
     audio: true
+  # d1-3B through mlx-vlm's `predict` API (TASK 002): noul, choice, score over text and pictures; no
+  # multi/text/number/date, no audio. fp16 is 6.25 GB (5.8 GiB) on disk, 5.8 GiB in memory; 8bit: LiquidAI/d1-3B-MLX-8bit (3.7 GB)
+  - id: mlx-d1-3b
+    kind: mlx_local
+    repo: LiquidAI/d1-3B-MLX-fp16
+    # path: ~/.lmstudio/models/LiquidAI/d1-3B-MLX-fp16  # a folder instead of the HF cache (LM Studio)
+    context_tokens: 32768             # the card's context; a 30K-token state peaked at 7.2 GB
 
   # --- Ready-made /v1/systemone servers (planned, WI-1; disabled) ---
   - id: ollama-d1-2b
@@ -72,7 +81,7 @@ engines:
     mode: auto
     enabled: false
 
-# Cost estimate before a call (docs/TASK.md §6.2): (tokens_per_char × characters + overhead_tokens) × input price.
+# Cost estimate before a call (docs/tasks/task-001-decision-models-playground-v1.md §6.2): (tokens_per_char × characters + overhead_tokens) × input price.
 budget:
   tokens_per_char: 1.5                # Jev bills 0.95–1.65 tokens per character, d1.1 about 0.43 (SPIKE §3)
   overhead_tokens: 200

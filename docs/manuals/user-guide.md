@@ -31,7 +31,7 @@ Checklist of a first start (details in the README "Quick start"):
 |---|---|---|
 | 1 | `make setup` | `.venv`, dependencies, `.env` and `config.yaml` from the examples |
 | 2 | edit `.env` | `OPENROUTER_API_KEY` for cloud engines; the file mode is 600 |
-| 3 | `make models` | d1-2B and d1-Omni (8-bit MLX, ~4.6 GB) in `HF_HOME`; Apple Silicon only |
+| 3 | `make models` | the enabled MLX models of `config.yaml` in `HF_HOME` (d1-2B, d1-Omni ~4.6 GB; d1-3B fp16 6.25 GB = 5.8 GiB); not those with `path`; Apple Silicon only |
 | 4 | `make check` | availability of every engine, the catalog cache, today's spend |
 | 5 | `make run` | UI at <http://127.0.0.1:8790>, compat server on `:8791` |
 
@@ -303,7 +303,8 @@ The Matrix lists the configured engines, then the OpenRouter catalog models abse
 ### 7.2 Probing
 
 "Probe" sends short synthetic requests: the three base types, `choice` with 24, 100 and 240 options, `score` with 10
-levels; on local d1 also `multi`, `text`, `number`, `date` and audio on d1-Omni. The profile is saved in `probes/`.
+levels; on d1-2B and d1-Omni also `multi`, `text`, `number`, `date` and audio on d1-Omni. The profile is saved in
+`probes/`.
 Later runs use it at once: a question the engine does not serve is not sent.
 
 - "long" adds the full-context check. It is slow on a local model and costs money on a cloud one; the screen shows the
@@ -321,8 +322,8 @@ Later runs use it at once: a question the engine does not serve is not sent.
 |---|---|
 | Engine, Model | the engine id and the Hugging Face repository |
 | State | `unloaded`, `loading`, `in memory`, `busy`; or `unavailable` with the reason |
-| On disk | the model size in `HF_HOME` |
-| Snapshot | `<repo>-<YYYYMMDD>` from the revision date; without a date when offline |
+| On disk | the model size in `HF_HOME`, or in its folder (`path`) |
+| Snapshot | `<repo>-<YYYYMMDD>` from the revision date; without a date when offline or read from a folder |
 | MLX memory | the memory of the loaded model |
 | Last call, Calls | the time of the last call and their count since start |
 | Unload | frees the memory now |
@@ -338,6 +339,16 @@ Behaviour:
   interrupted.
 
 The lower part of the screen describes the compat server (§9).
+
+d1-3B (`mlx-d1-3b`, `LiquidAI/d1-3B-MLX-fp16`):
+
+- answers `noul`, `choice` and `score` over text and pictures. A `multi`, `text`, `number` or `date` question is
+  `unsupported` for it; a request with audio is `refused`. The compat server answers it in System One names.
+- holds 5.8 GiB in memory (d1-2B: 2.1 GiB). A load takes about 3.4 s (d1-2B: 1.7 s); the first call after it is
+  about 1.2 s slower than a warm one (334 ms for three questions).
+- `path` in `config.yaml` reads a model folder instead of `HF_HOME`, for example the LM Studio one:
+  `path: ~/.lmstudio/models/LiquidAI/d1-3B-MLX-fp16`. `repo` stays: it names the model. `make models` skips such an
+  engine.
 
 ### 8.2 Context of a local model
 
@@ -483,6 +494,7 @@ model's id and state, and the mlx-vlm version.
 | `OPENROUTER_API_KEY is not set in .env` | set the key, restart |
 | `disabled in config.yaml` | `enabled: true` for the engine, restart |
 | `<repo> is not downloaded: make models` | `make models` |
+| `<path> is not a model folder: no config.json` | fix `path` in `config.yaml`: the folder with `config.json` and the weights |
 | `mlx-vlm is not installed (requirements-mlx.txt)` | `make setup` on Apple Silicon |
 | `mlx-vlm X < 0.7.11` | update mlx-vlm in `.venv` (`requirements-mlx.txt`) |
 | `needs macOS on Apple Silicon` | local models run only there (README "Other platforms") |
