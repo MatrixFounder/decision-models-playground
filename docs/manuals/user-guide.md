@@ -74,7 +74,8 @@ Direct links:
 The left column holds the state: the call text or JSON.
 
 - "Text" / "JSON" switches the input mode. Text is sent as a string. JSON is sent as an object, for example
-  `{"fragments": [...]}` from whip-insight.
+  `{"fragments": [...]}` from whip-insight. The switch converts the field: a plain text becomes a JSON string, and
+  "Text" unwraps it back, so the request does not change. A text that already is JSON is kept as it is.
 - "Preset…" loads a ready state and questions: `demo_bank_call` (noul, choice, score), `demo_extraction` (multi,
   text, number, date), `call_kind` (call kind by audio), 56 whip-insight tags `std_*` after `make import-tags`.
 - "File…" loads `.txt`, `.md` or `.json`.

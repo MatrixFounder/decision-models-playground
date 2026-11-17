@@ -15,3 +15,14 @@ export function backupOnOpen(currentJson, existingBackupJson) {
 export function bodyState(state, mediaCount) {
   return mediaCount > 0 && typeof state === 'string' && state.trim() === '' ? null : state;
 }
+
+/** The state field after the Text / JSON switch. Text → JSON keeps a text that already is a JSON object, array or
+ * string and writes any other text as a JSON string, so a plain call text is sent unchanged. JSON → Text unwraps a JSON
+ * string and keeps any other text as it is. A blank field is left as it is. */
+export function switchStateText(text, mode) {
+  if (text.trim() === '') return text;
+  let value;
+  try { value = JSON.parse(text); } catch { return mode === 'json' ? JSON.stringify(text) : text; }
+  if (mode === 'json') return typeof value === 'string' || (value !== null && typeof value === 'object') ? text : JSON.stringify(text);
+  return typeof value === 'string' ? value : text;
+}

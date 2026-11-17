@@ -7,7 +7,7 @@ import { History, isWorkbenchRun, notWorkbenchMessage } from './history.js';
 import { applyStatic, getLang, setLang, t } from './i18n.js';
 import { LocalModelsView } from './local.js';
 import { MatrixView } from './matrix.js';
-import { backupOnOpen, bodyState } from './draft.js';
+import { backupOnOpen, bodyState, switchStateText } from './draft.js';
 import { makeHandler } from './runview.js';
 import { el, fromRequest, QuestionEditor, toRequest } from './questions.js';
 import { fmtUsd, renderResults } from './results.js';
@@ -77,7 +77,7 @@ function currentQuestions() {
 }
 function currentState() {
   const text = $('#state').value;
-  if (ui.stateMode !== 'json') return text;
+  if (ui.stateMode !== 'json' || text.trim() === '') return text;
   try { return JSON.parse(text); } catch (e) { throw new Error(t('json_invalid', { msg: e.message })); }
 }
 /** The request: the state, the questions and the uploads. A recording alone is the whole state (SPIKE §2.5). */
@@ -380,6 +380,13 @@ function setStateMode(mode) {
   ui.stateMode = mode;
   document.querySelectorAll('[data-state-mode]').forEach((b) => b.classList.toggle('on', b.dataset.stateMode === mode));
 }
+/** The Text / JSON buttons: the field is converted with the mode, so a plain text does not turn into a JSON error. */
+function switchStateMode(mode) {
+  if (mode === ui.stateMode) return;
+  $('#state').value = switchStateText($('#state').value, mode);
+  setStateMode(mode);
+  userEdited();
+}
 function setState(state) {
   if (state != null && typeof state === 'object') {
     setStateMode('json');
@@ -469,7 +476,7 @@ async function start() {
   setLang(getLang());
   $('#lang').addEventListener('click', () => { setLang(getLang() === 'ru' ? 'en' : 'ru'); relabel(); });
   document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
-  document.querySelectorAll('[data-state-mode]').forEach((b) => b.addEventListener('click', () => { setStateMode(b.dataset.stateMode); userEdited(); }));
+  document.querySelectorAll('[data-state-mode]').forEach((b) => b.addEventListener('click', () => switchStateMode(b.dataset.stateMode)));
   $('#state').addEventListener('input', userEdited);
   $('#title').addEventListener('input', userEdited);
   $('#tags').addEventListener('input', userEdited);
